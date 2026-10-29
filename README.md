@@ -39,8 +39,7 @@ docker run -d -p 8080:8080 -v inbox-assistant-data:/data \
 
 `make lint-bot` mounts `bot/` at `/bot` and runs the core image's
 `python -m core.config.lint /bot`. `make steps` runs
-`scripts/inbox-assistant-steps.sh` against the built image, or warns and exits 0
-if that script is missing.
+`scripts/inbox-assistant-steps.sh` against the built image (missing pieces fail).
 
 Open <http://localhost:8080>. Every page redirects to **`/setup`** until you
 finish it. Create the bot-admin login, leave the LLM on **stub** (no key, $0),

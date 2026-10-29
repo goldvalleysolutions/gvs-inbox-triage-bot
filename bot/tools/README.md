@@ -1,5 +1,5 @@
 Custom tools for this bot (0–3 `*.py` files), registered through
-`gvs_bot_core.tools`.
+`core.sdk`.
 
 Inbox Assistant ships no role tools. The allowlist is the core built-ins
 `clock.now`, `notes`, and `email.send` (disabled until SMTP_* are set on

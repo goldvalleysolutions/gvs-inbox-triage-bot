@@ -1,11 +1,11 @@
-"""Drive the Inbox Assistant walkthrough against a running image (CI + make)."""
+"""Drive the Inbox Assistant walkthrough inside the bot image under test."""
 
 from __future__ import annotations
 
 import json
 import re
 import secrets
-import subprocess
+import sqlite3
 import sys
 import urllib.error
 import urllib.parse
@@ -13,12 +13,12 @@ import urllib.request
 from http.cookiejar import CookieJar
 from pathlib import Path
 
-import httpx2
-
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat
 from core.auth.token import load_private_key, public_openssh, sign_token
-from tests.mcp_helpers import call_tool, enable_mcp_http, list_tools
 
 BRAND = "Inbox Assistant Bot"
+MCP_ACCEPT = "application/json, text/event-stream"
 
 
 def _opener() -> urllib.request.OpenerDirector:
@@ -46,6 +46,23 @@ def request(
         return resp.status, resp.read().decode()
     except urllib.error.HTTPError as exc:
         return exc.code, exc.read().decode()
+
+
+def json_request(
+    opener: urllib.request.OpenerDirector,
+    base: str,
+    method: str,
+    path: str,
+    obj: dict,
+) -> tuple[int, str]:
+    return request(
+        opener,
+        base,
+        method,
+        path,
+        json.dumps(obj).encode(),
+        {"Content-Type": "application/json", "Accept": "application/json"},
+    )
 
 
 def csrf_from(html: str) -> str:
@@ -83,9 +100,121 @@ def ask(opener: urllib.request.OpenerDirector, base: str, text: str) -> dict:
     return json.loads(raw)
 
 
+def _install_runtime_root_key() -> Path:
+    priv = Path("/tmp/gvs_test_ed25519")
+    priv.write_bytes(
+        Ed25519PrivateKey.generate().private_bytes(
+            Encoding.PEM, PrivateFormat.OpenSSH, NoEncryption()
+        )
+    )
+    Path("/app/keys/gvs_root.pub").write_text(public_openssh(load_private_key(priv)))
+    return priv
+
+
+def _bot_id() -> str:
+    row = sqlite3.connect("/data/bot.db").execute(
+        "select value from settings where key='bot_id'"
+    ).fetchone()
+    if not row:
+        raise SystemExit("no bot_id in /data/bot.db")
+    return row[0]
+
+
+def _mcp_body(raw: str) -> dict:
+    raw = raw.strip()
+    if not raw:
+        return {}
+    if raw[0] in "{[":
+        msg = json.loads(raw)
+    else:
+        chunks = [ln[5:].strip() for ln in raw.splitlines() if ln.startswith("data:")]
+        if not chunks:
+            raise SystemExit("no mcp data: " + raw[:400])
+        msg = json.loads(chunks[-1])
+    if msg.get("error"):
+        raise SystemExit(f"mcp error: {msg['error']}")
+    return msg.get("result") or {}
+
+
+def mcp_rpc(
+    base: str,
+    token: str,
+    method: str,
+    params: dict | None,
+    rpc_id: int | None,
+    session: str | None,
+) -> tuple[str | None, dict]:
+    payload: dict = {"jsonrpc": "2.0", "method": method}
+    if rpc_id is not None:
+        payload["id"] = rpc_id
+    if params is not None:
+        payload["params"] = params
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": MCP_ACCEPT,
+        "Content-Type": "application/json",
+        "Origin": base.rstrip("/"),
+    }
+    if session:
+        headers["Mcp-Session-Id"] = session
+    req = urllib.request.Request(
+        base.rstrip("/") + "/mcp/",
+        data=json.dumps(payload).encode(),
+        headers=headers,
+        method="POST",
+    )
+    try:
+        resp = urllib.request.urlopen(req, timeout=30)
+        body = resp.read().decode()
+        sid = resp.headers.get("Mcp-Session-Id") or resp.headers.get("mcp-session-id") or session
+        return sid, _mcp_body(body) if rpc_id is not None else {}
+    except urllib.error.HTTPError as exc:
+        raise SystemExit(f"/mcp/ {method} {exc.code}: {exc.read()[:400]}") from exc
+
+
+def enable_mcp_token(opener: urllib.request.OpenerDirector, base: str, name: str) -> str:
+    code, raw = json_request(opener, base, "POST", "/api/admin/mcp", {"mode": "read_only"})
+    if code not in {200, 201, 204}:
+        raise SystemExit(f"/api/admin/mcp {code}: {raw[:300]}")
+    code, raw = json_request(opener, base, "POST", "/api/admin/mcp/tokens", {"name": name})
+    if code not in {200, 201}:
+        raise SystemExit(f"/api/admin/mcp/tokens {code}: {raw[:300]}")
+    data = json.loads(raw)
+    token = data.get("token") or data.get("secret") or data.get("value")
+    if not token:
+        raise SystemExit("no mcp token in " + raw[:400])
+    return token
+
+
+def mcp_tool_names(base: str, token: str) -> tuple[str | None, list[str]]:
+    sid, _ = mcp_rpc(
+        base,
+        token,
+        "initialize",
+        {
+            "protocolVersion": "2025-03-26",
+            "capabilities": {},
+            "clientInfo": {"name": "inbox-steps", "version": "0"},
+        },
+        1,
+        None,
+    )
+    mcp_rpc(base, token, "notifications/initialized", None, None, sid)
+    sid, result = mcp_rpc(base, token, "tools/list", {}, 2, sid)
+    return sid, [t["name"] for t in result.get("tools") or []]
+
+
+def mcp_call_tool(base: str, token: str, session: str | None, name: str, arguments: dict) -> str:
+    _, result = mcp_rpc(
+        base, token, "tools/call", {"name": name, "arguments": arguments}, 3, session
+    )
+    texts = [c.get("text", "") for c in result.get("content") or [] if isinstance(c, dict)]
+    return "\n".join(texts)
+
+
 def main() -> None:
-    base, smtp_port, repo, cname = sys.argv[1:5]
-    key_path = Path(repo) / "tests" / "fixtures" / "gvs_test_ed25519"
+    base, smtp_port = sys.argv[1:3]
+    key_path = _install_runtime_root_key()
     opener = _opener()
 
     print("step 1 setup")
@@ -153,23 +282,7 @@ def main() -> None:
     assert ask(opener, base, "CALL web.browse {}")["blocked"] is True
 
     print("step 6 root edit")
-    Path("/tmp/gvs_test.pub").write_text(public_openssh(load_private_key(key_path)))
-    subprocess.check_call(["docker", "cp", "/tmp/gvs_test.pub", f"{cname}:/tmp/gvs_test.pub"])
-    subprocess.check_call(
-        ["docker", "exec", "-u", "0", cname, "cp", "/tmp/gvs_test.pub", "/app/keys/gvs_root.pub"]
-    )
-    bot_id = subprocess.check_output(
-        [
-            "docker",
-            "exec",
-            cname,
-            "python",
-            "-c",
-            "import sqlite3; c=sqlite3.connect('/data/bot.db'); "
-            "print(c.execute(\"select value from settings where key='bot_id'\").fetchone()[0])",
-        ],
-        text=True,
-    ).strip()
+    bot_id = _bot_id()
     token = sign_token(load_private_key(key_path), bot_id, secrets.token_urlsafe(8))
     code, _ = request(opener, base, "GET", "/gvs/login?token=" + token)
     assert code in {303, 200}, code
@@ -223,26 +336,32 @@ def main() -> None:
         admin, base, "/admin/settings", {"provider": "stub", "model": "stub"}, settings_html
     )
     assert code in {200, 303}, code
+
     print("step 9 mcp")
-    http = httpx2.Client(base_url=base, follow_redirects=True, timeout=30.0)
-    token = enable_mcp_http(http, mode="read_only", name="inbox")
-    names = list_tools(f"{base}/mcp", token)
+    mcp_token = enable_mcp_token(admin, base, "inbox")
+    session, names = mcp_tool_names(base, mcp_token)
     assert "ask" in names and "email.send" not in names, names
-    asked = call_tool(f"{base}/mcp", token, "ask", {"text": "ping"})
+    asked = mcp_call_tool(base, mcp_token, session, "ask", {"text": "ping"})
     assert "(stub)" in asked or "ping" in asked, asked
-    http.post("/api/admin/mcp", json={"mode": "write_with_approval"}).raise_for_status()
-    pending = json.loads(
-        call_tool(
-            f"{base}/mcp",
-            token,
-            "email.send",
-            {"to": "admin@example.com", "subject": "invoice", "body": "draft reply"},
-        )
+    code, raw = json_request(
+        admin, base, "POST", "/api/admin/mcp", {"mode": "write_with_approval"}
     )
+    if code not in {200, 201, 204}:
+        raise SystemExit(f"mcp write mode {code}: {raw[:300]}")
+    pending_raw = mcp_call_tool(
+        base,
+        mcp_token,
+        session,
+        "email.send",
+        {"to": "admin@example.com", "subject": "invoice", "body": "draft reply"},
+    )
+    pending = json.loads(pending_raw)
     assert pending["status"] == "pending_approval", pending
-    approved = http.post(f"/api/approvals/{pending['id']}/approve").json()
+    code, raw = json_request(admin, base, "POST", f"/api/approvals/{pending['id']}/approve", {})
+    if code not in {200, 201}:
+        raise SystemExit(f"approve {code}: {raw[:300]}")
+    approved = json.loads(raw)
     assert approved["status"] == "approved", approved
-    http.close()
     print("OK inbox-assistant-steps")
 
 
