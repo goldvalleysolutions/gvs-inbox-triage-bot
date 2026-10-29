@@ -1,4 +1,5 @@
-Custom tools for this box (0–3 `*.py` files), registered through `core.sdk`.
+Custom tools for this bot (0–3 `*.py` files), registered through
+`core.sdk`.
 
 Inbox Assistant ships no role tools. The allowlist is the core built-ins
 `clock.now`, `notes`, and `email.send` (disabled until SMTP_* are set on

@@ -1,5 +1,5 @@
-# Demo walkthrough for Inbox Assistant in a Box.
-title: Inbox Assistant in a Box — try it
+# Demo walkthrough for Inbox Assistant Bot.
+title: Inbox Assistant Bot — try it
 steps:
   - id: setup
     title: Finish /setup
@@ -28,7 +28,7 @@ steps:
     title: GVS role edit
     note: Sign in with gvs-root; change the role; no rebuild.
   - id: admin_404
-    title: Box admin cannot see GVS screens
+    title: Bot admin cannot see GVS screens
     note: /gvs/role and /gvs/activity return 404.
   - id: model
     title: Switch model in admin
