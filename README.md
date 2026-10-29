@@ -1,0 +1,157 @@
+# Inbox Assistant Bot
+
+Gold Valley Bots — One job each.
+
+A small-business inbox clerk on `gvs-bot-core`. The owner pastes an email; the
+bot triages it and drafts a reply. One image, `/setup`, memory, allowlisted
+tools, and the Gold Valley Solutions gold theme. There is no IMAP or POP — the
+owner provides the message.
+
+## What this bot adds on top of core
+
+Core already provides `/setup`, chat, `/data/bot.db` memory, allowlisted tools,
+MCP, a spend cap, and the Gold Valley Solutions theme. Inbox Assistant Bot adds:
+
+- The inbox-clerk role and the `triage` skill (urgent / wait / fyi / no-reply,
+  plus a draft reply in the owner's voice)
+- Allowlist: `clock.now`, `notes`, and `email.send` (disabled until SMTP is set
+  on `/setup`)
+- An SMTP connector. CI and this README use stub LLM and a fake SMTP server —
+  never a real mailbox, never a provider key
+- No extra Python tools and no web browsing (refused and logged)
+
+## Build and run locally
+
+The runtime is the private image `ghcr.io/goldvalleysolutions/bot-core:0.2`
+(never `latest`). Log in to GHCR with a token that has `read:packages`:
+
+```bash
+echo "$GHCR_TOKEN" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+```
+
+Then, from this repo:
+
+```bash
+make build
+docker run -d -p 8080:8080 -v inbox-assistant-data:/data \
+  ghcr.io/goldvalleysolutions/inbox-assistant-bot:dev
+```
+
+`make lint-bot` mounts `bot/` at `/bot` and runs the core image's
+`python -m core.config.lint /bot`. `make steps` runs
+`scripts/inbox-assistant-steps.sh` against the built image, or warns and exits 0
+if that script is missing.
+
+Open <http://localhost:8080>. Every page redirects to **`/setup`** until you
+finish it. Create the bot-admin login, leave the LLM on **stub** (no key, $0),
+enter SMTP only if you want `email.send`, then run the self-test.
+`curl -f http://localhost:8080/health` works before and after setup.
+
+### Try it (stub)
+
+Do these on the running image. Stub LLM only — no provider keys.
+
+1. **`/setup`** — stub model, no LLM key. SMTP host/port/user/password/from if
+   you want mail.
+2. **Clock** — ask the time. `clock.now` runs and is logged.
+3. **Triage** — paste a customer email. The `triage` skill labels it and drafts
+   a reply. There is no IMAP or POP.
+4. **Notes** — save a one-line follow-up with `notes`.
+5. **Email** — send the draft to the allowlisted admin address. The activity log
+   records `email.send`.
+6. **Web browse blocked** — ask it to search the web. The call is refused and
+   logged `blocked` / `not_allowed`.
+7. **Bot admin 404** — as bot admin, `/gvs/role`, `/gvs/skills`, `/gvs/memory`
+   and `/gvs/activity` are 404.
+8. **MCP** — in bot admin, turn MCP on in **read only**, issue a token. An MCP
+   client at `/mcp` can `ask` and `tools/list` (no `email.send`). Switch to
+   **write with approval**, request a send, approve it.
+
+## What it can do
+
+- Triage pasted email (urgent / wait / fyi / no-reply) and draft a reply
+- Tell the time (`clock.now`) and keep short follow-ups (`notes`)
+- Send the draft (`email.send`) after SMTP is set on `/setup`, only to the admin allowlist
+- Remember facts across a container restart
+- Refuse web browsing, IMAP/POP mailbox fetch, and any tool not on `tools_allowed`
+
+## Prerequisites
+
+| Mode | What you need |
+|---|---|
+| Stub (default, CI, this README) | Docker. GHCR `read:packages` login to pull `bot-core:0.2`. No LLM key. $0. |
+| Live | A key from Anthropic, OpenAI, OpenRouter, or xAI, entered on `/setup` or in admin. Never committed. |
+| Email | SMTP host/port (and user/password/from if the server needs them). No IMAP or POP. |
+
+Default spend cap is **$25/month**. At the cap the bot falls back to stub.
+
+## Estimated monthly cost
+
+Cost ≈ (chats per day × days × turns per chat × $ per turn). Inbox Assistant's
+profile in `bot.yaml` is **10 chats/day** and **4 turns/chat**. On the stub
+model that is **$0**. On a small live model, treat $0.01–0.03 per turn as a
+planning range; the bot stops live calls at the **$25** cap.
+
+| How often | How chatty | Est. / month (live) | Notes |
+|---|---|---|---|
+| Light (2 chats/day) | Short (2 turns) | $0–2 | Well under the cap |
+| Typical (10 chats/day) | Inbox default (4 turns) | $5–15 | The `cost:` profile |
+| Heavy (30 chats/day) | Long (8 turns) | up to **$25** | Cap, then stub |
+| Stub only | any | **$0** | CI and first-boot default |
+
+Keys and SMTP passwords live encrypted in `/data/bot.db`. They are never in the
+image, the repo, or CI.
+
+## Admin
+
+| | Bot admin (you create on `/setup`) | GVS operator (`gvs-root` token) |
+|---|---|---|
+| LLM provider, model, API key | ✅ | ✅ |
+| SMTP, allowlist, spend cap, theme, MCP | ✅ | ✅ |
+| Role, skills, memory, activity, users | ❌ 404 | ✅ |
+
+There is no root password and no self-hoster root option. A
+**Powered by Gold Valley Solutions** footer is on every page and cannot be hidden.
+
+## Configuration
+
+| Item | Where | Notes |
+|---|---|---|
+| Manifest | `bot/bot.yaml` | `make lint-bot` |
+| Role / skills | `bot/role.md`, `bot/skills/triage/SKILL.md` | Seeded into `bot.db` on first boot |
+| Tools | `bot/tools/` | Empty; built-ins only (`clock.now`, `notes`, `email.send`) |
+| Theme | `bot/theme.yaml` | GVS gold/white/Inter defaults |
+| Data | `/data/bot.db` + `/data/bot.key` | One SQLite DB; key is 0600 |
+| Port | `8080` | Non-root user in the image |
+
+## Updates and backups
+
+Rebuild with `make build` (or pull a newer `inbox-assistant-bot` image when
+publishing is on). Unedited role/skill text updates from the image; text the
+GVS operator edited is kept. Back up `bot.db` and `bot.key` **separately**.
+Losing the key means re-entering secrets; losing only the DB means a fresh
+`/setup`. Delete the volume to start over.
+
+## FAQ
+
+**Working with health records?** When you run a project yourself, you choose an
+AI provider and host that fit your compliance needs. Our hosting and builds
+don't process patient health information.
+
+**Can it browse the web?** No. That is not on `tools_allowed` and a call is
+refused and logged.
+
+**Does it read my mailbox?** No. There is no IMAP or POP. Paste or type the
+message you want triaged.
+
+**Does CI send real email?** No. Tests and the image job use stub LLM only.
+
+## Help and paid services
+
+Gold Valley Solutions offers paid **setup, configuration, training and hosting**.
+See the [pricing page](https://www.goldvalleysolutions.com/).
+
+## License
+
+Apache License 2.0. See the repository `LICENSE` and `NOTICE`.
+© 2026 Gold Valley Solutions LLC.

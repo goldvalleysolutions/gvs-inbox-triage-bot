@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Inbox Assistant walkthrough against a built inbox-assistant-in-a-box image.
+# Inbox Assistant walkthrough against a built inbox-assistant-bot image.
 # Stub LLM, fake SMTP, MCP. Usage: scripts/inbox-assistant-steps.sh <image> [host-port]
 set -euo pipefail
 

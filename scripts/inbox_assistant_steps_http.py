@@ -18,7 +18,7 @@ import httpx2
 from core.auth.token import load_private_key, public_openssh, sign_token
 from tests.mcp_helpers import call_tool, enable_mcp_http, list_tools
 
-BRAND = "Inbox Assistant in a Box"
+BRAND = "Inbox Assistant Bot"
 
 
 def _opener() -> urllib.request.OpenerDirector:
@@ -96,7 +96,7 @@ def main() -> None:
         base,
         "/setup",
         {
-            "step": "box_admin",
+            "step": "bot_admin",
             "username": "admin",
             "password": "secret12",
             "email": "admin@example.com",
@@ -122,7 +122,7 @@ def main() -> None:
             "step": "connectors",
             "SMTP_HOST": "host.docker.internal",
             "SMTP_PORT": smtp_port,
-            "SMTP_FROM": "box@example.com",
+            "SMTP_FROM": "assistant@example.com",
         },
         html,
     )
@@ -158,19 +158,19 @@ def main() -> None:
     subprocess.check_call(
         ["docker", "exec", "-u", "0", cname, "cp", "/tmp/gvs_test.pub", "/app/keys/gvs_root.pub"]
     )
-    box_id = subprocess.check_output(
+    bot_id = subprocess.check_output(
         [
             "docker",
             "exec",
             cname,
             "python",
             "-c",
-            "import sqlite3; c=sqlite3.connect('/data/box.db'); "
-            "print(c.execute(\"select value from settings where key='box_id'\").fetchone()[0])",
+            "import sqlite3; c=sqlite3.connect('/data/bot.db'); "
+            "print(c.execute(\"select value from settings where key='bot_id'\").fetchone()[0])",
         ],
         text=True,
     ).strip()
-    token = sign_token(load_private_key(key_path), box_id, secrets.token_urlsafe(8))
+    token = sign_token(load_private_key(key_path), bot_id, secrets.token_urlsafe(8))
     code, _ = request(opener, base, "GET", "/gvs/login?token=" + token)
     assert code in {303, 200}, code
     code, role_html = request(opener, base, "GET", "/gvs/role")
@@ -185,7 +185,7 @@ def main() -> None:
     assert code in {200, 303}, code
     assert "Maple Inbox" in ask(opener, base, "who are you?")["text"]
 
-    print("step 7 box admin 404")
+    print("step 7 bot admin 404")
     admin = _opener()
     code, login_html = request(admin, base, "GET", "/admin/login")
     assert code == 200
