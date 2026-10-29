@@ -60,6 +60,7 @@ done
 
 docker run --rm \
   --network "container:${name}" \
+  -e PYTHONPATH=/app \
   -v "$here/scripts:/steps:ro" \
   -v "${vol}:/data" \
   -v "${pubkey}:/app/keys/gvs_root.pub" \
