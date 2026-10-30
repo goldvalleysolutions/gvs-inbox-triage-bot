@@ -9,25 +9,27 @@ _Screenshot: first-boot `/setup` and the chat page after the self-test (this PR)
 
 ## Up and running in 5 minutes
 
-Until publishing is on, build from this repo (Docker or Colima, arm64 or amd64):
+The core image `ghcr.io/goldvalleysolutions/core-bot` is private on GHCR. Create a GitHub
+token with `read:packages`, then build this bot `FROM ghcr.io/goldvalleysolutions/core-bot:${CORE}`
+(`CORE=0.2`, never `latest`) from the repo root (Docker or Colima, arm64 or amd64):
 
 ```bash
-git clone git@github.com:goldvalleysolutions/gvs-core-bot.git
-cd gvs-core-bot
-make build BOX=inbox-assistant
-docker run -d -p 8080:8080 -v inbox-assistant-data:/data inbox-assistant-in-a-box
+echo YOUR_PAT | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+
+git clone git@github.com:goldvalleysolutions/gvs-inbox-assistant-bot.git
+cd gvs-inbox-assistant-bot
+docker build -f bot/Dockerfile --build-arg CORE=0.2 -t inbox-assistant-bot:dev .
+docker run -d -p 8080:8080 -v inbox-assistant-data:/data inbox-assistant-bot:dev
 ```
+
+The Dockerfile copies `bot/` to `/bot/` on top of the pinned core; no RUN steps.
 
 Open <http://localhost:8080>. Every page redirects to **`/setup`** until you finish
 it. Create the box-admin login, leave the LLM on **stub** (no key, $0), enter SMTP
 only if you want `email.send`, then run the self-test.
 `curl -f http://localhost:8080/health` works before and after setup.
 
-Once Mike turns publishing on (or after this role is mirrored to its own repo):
-
-```bash
-docker run -d -p 8080:8080 -v inbox-assistant-data:/data goldvalleysolutions/inbox-assistant-in-a-box
-```
+There is no published image for this bot yet; build it locally as above.
 
 ### Try it (stub, CI)
 
@@ -110,7 +112,7 @@ There is no root password and no self-hoster root option. A
 
 ## Updates and backups
 
-Pull a newer `inbox-assistant-in-a-box` (or rebuild `make build BOX=inbox-assistant`).
+Rebuild `inbox-assistant-bot:dev` after `git pull` (the `docker build` above).
 Unedited role/skill text updates from the image; text the GVS operator edited is
 kept. Back up `bot.db` and `bot.key` **separately**. Losing the key means
 re-entering secrets; losing only the DB means a fresh `/setup`. Delete the
