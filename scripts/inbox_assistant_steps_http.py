@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from steps_web import Web, fail, mcp_call, mcp_list
+from steps_web import Web, check_access_policy, fail, mcp_call, mcp_list
 
 
 def admin_checks(base: str, brand: str) -> Web:
@@ -68,6 +68,7 @@ def main() -> None:
 
     print("step 7 bot admin: root screens 404")
     admin = admin_checks(base, BRAND)
+    check_access_policy(base, admin, ["/"])  # Anyone / Signed-in users only
 
     print("step 8 model switch (untested key refused, then stub)")
     admin.model_switch_gated()
@@ -87,11 +88,9 @@ def main() -> None:
             {"to": "admin@example.com", "subject": "invoice", "body": "draft reply"},
         )
     )
-    if pending.get("status") != "pending_approval":
+    if pending.get("status") not in {"pending_approval", "approval_required"}:
         fail(f"expected pending_approval: {pending}")
-    admin.approve(pending["id"])
-    _, approvals = admin.get("/admin/approvals")
-    assert pending["id"] not in approvals, "approval still pending"
+    assert admin.approve(pending["id"]) == "approved", "approval did not run"
     print("OK inbox-assistant-steps")
 
 

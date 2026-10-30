@@ -15,7 +15,7 @@ HTTP_SETUP = {"smtp": True}
 
 def test_setup(page: Page, fresh_bot, smtp) -> None:
     seen = setup_ui(page, fresh_bot.base, smtp_fields(smtp))
-    assert seen == ["bot_admin", "model", "connectors", "self_test"], seen
+    assert seen == ["bot_admin", "access", "model", "connectors", "self_test"], seen
     page.goto(fresh_bot.base + "/")
     expect(page.locator("body")).to_contain_text(BRAND)
     expect(page.locator("body")).to_contain_text("Powered by Gold Valley Solutions")
