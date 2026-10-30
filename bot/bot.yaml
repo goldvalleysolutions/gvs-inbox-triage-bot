@@ -5,7 +5,7 @@
 name: Inbox Assistant in a Box
 slug: inbox-assistant
 version: 0.1.0
-core: "0.2"
+core: "0.3"
 role: role.md
 skills: skills/
 tools_allowed:

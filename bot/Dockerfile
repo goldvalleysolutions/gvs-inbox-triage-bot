@@ -5,10 +5,10 @@
 #   Needs `docker login ghcr.io` (core-bot is private). Override CORE_IMAGE to use a
 #   locally built core (e.g. --build-arg CORE_IMAGE=core-bot:${CORE}).
 # CORE pins the core as X.Y (never latest); it must equal `core:` in bot.yaml.
-ARG CORE=0.2
+ARG CORE=0.3
 ARG CORE_IMAGE=ghcr.io/goldvalleysolutions/core-bot:${CORE}
 FROM ${CORE_IMAGE}
-ARG CORE=0.2
+ARG CORE=0.3
 ARG CORE_IMAGE
 ARG IMAGE_TAG=inbox-assistant-bot:dev
 LABEL org.opencontainers.image.title="Inbox Assistant in a Box" \

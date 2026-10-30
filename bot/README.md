@@ -11,14 +11,14 @@ _Screenshot: first-boot `/setup` and the chat page after the self-test (this PR)
 
 The core image `ghcr.io/goldvalleysolutions/core-bot` is private on GHCR. Create a GitHub
 token with `read:packages`, then build this bot `FROM ghcr.io/goldvalleysolutions/core-bot:${CORE}`
-(`CORE=0.2`, never `latest`) from the repo root (Docker or Colima, arm64 or amd64):
+(`CORE=0.3`, never `latest`) from the repo root (Docker or Colima, arm64 or amd64):
 
 ```bash
 echo YOUR_PAT | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
 
 git clone git@github.com:goldvalleysolutions/gvs-inbox-assistant-bot.git
 cd gvs-inbox-assistant-bot
-docker build -f bot/Dockerfile --build-arg CORE=0.2 -t inbox-assistant-bot:dev .
+docker build -f bot/Dockerfile --build-arg CORE=0.3 -t inbox-assistant-bot:dev .
 docker run -d -p 8080:8080 -v inbox-assistant-data:/data inbox-assistant-bot:dev
 ```
 
@@ -145,14 +145,14 @@ Apache License 2.0. See the repository `LICENSE` and `NOTICE`.
 
 ## End-to-end tests (Playwright)
 
-`tests/e2e/` starts the bot on core from source (pinned to gvs-core-bot `f597d3d`) with
+`tests/e2e/` starts the bot on core from source (pinned to gvs-core-bot `a1a5b5d`) with
 uvicorn, a temp `/data` and the stub model, then drives it in Chromium at desktop
 (1280x800) and mobile (390x844) sizes. `verify-local.sh` runs it through
 `.verify-local.env`, and it must pass before merge.
 
 ```bash
 git clone https://github.com/goldvalleysolutions/gvs-core-bot.git ../gvs-core-bot
-git -C ../gvs-core-bot checkout f597d3d
+git -C ../gvs-core-bot checkout a1a5b5d
 pip install -r ../gvs-core-bot/requirements.txt -r tests/e2e/requirements.txt
 python -m playwright install chromium
 GVS_CORE_DIR=../gvs-core-bot python -m pytest tests/e2e -q
