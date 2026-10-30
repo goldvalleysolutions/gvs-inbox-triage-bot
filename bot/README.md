@@ -9,25 +9,27 @@ _Screenshot: first-boot `/setup` and the chat page after the self-test (this PR)
 
 ## Up and running in 5 minutes
 
-Until publishing is on, build from this repo (Docker or Colima, arm64 or amd64):
+The core image `ghcr.io/goldvalleysolutions/core-bot` is private on GHCR. Create a GitHub
+token with `read:packages`, then build this bot `FROM ghcr.io/goldvalleysolutions/core-bot:${CORE}`
+(`CORE=0.2`, never `latest`) from the repo root (Docker or Colima, arm64 or amd64):
 
 ```bash
-git clone git@github.com:goldvalleysolutions/gvs-box-base.git
-cd gvs-box-base
-make build BOX=inbox-assistant
-docker run -d -p 8080:8080 -v inbox-assistant-data:/data inbox-assistant-in-a-box
+echo YOUR_PAT | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+
+git clone git@github.com:goldvalleysolutions/gvs-inbox-assistant-bot.git
+cd gvs-inbox-assistant-bot
+docker build -f bot/Dockerfile --build-arg CORE=0.2 -t inbox-assistant-bot:dev .
+docker run -d -p 8080:8080 -v inbox-assistant-data:/data inbox-assistant-bot:dev
 ```
+
+The Dockerfile copies `bot/` to `/bot/` on top of the pinned core; no RUN steps.
 
 Open <http://localhost:8080>. Every page redirects to **`/setup`** until you finish
 it. Create the box-admin login, leave the LLM on **stub** (no key, $0), enter SMTP
 only if you want `email.send`, then run the self-test.
 `curl -f http://localhost:8080/health` works before and after setup.
 
-Once Mike turns publishing on (or after this role is mirrored to its own repo):
-
-```bash
-docker run -d -p 8080:8080 -v inbox-assistant-data:/data goldvalleysolutions/inbox-assistant-in-a-box
-```
+There is no published image for this bot yet; build it locally as above.
 
 ### Try it (stub, CI)
 
@@ -72,7 +74,7 @@ Default spend cap is **$25/month**. At the cap the box falls back to stub.
 ## Estimated monthly cost
 
 Cost ≈ (chats per day × days × turns per chat × $ per turn). Inbox Assistant's
-profile in `box.yaml` is **10 chats/day** and **4 turns/chat**. On the stub
+profile in `bot.yaml` is **10 chats/day** and **4 turns/chat**. On the stub
 model that is **$0**. On a small live model, treat $0.01–0.03 per turn as a
 planning range; the box stops live calls at the **$25** cap.
 
@@ -83,7 +85,7 @@ planning range; the box stops live calls at the **$25** cap.
 | Heavy (30 chats/day) | Long (8 turns) | up to **$25** | Cap, then stub |
 | Stub only | any | **$0** | CI and first-boot default |
 
-Keys and SMTP passwords live encrypted in `/data/box.db`. They are never in the
+Keys and SMTP passwords live encrypted in `/data/bot.db`. They are never in the
 image, the repo, or CI.
 
 ## Admin
@@ -101,18 +103,18 @@ There is no root password and no self-hoster root option. A
 
 | Item | Where | Notes |
 |---|---|---|
-| Manifest | `boxes/inbox-assistant/box.yaml` | `make lint-box BOX=inbox-assistant` |
-| Role / skills | `role.md`, `skills/triage/SKILL.md` | Seeded into `box.db` on first boot |
+| Manifest | `bot/bot.yaml` | `make lint-bot BOT=<this repo>/bot (in gvs-core-bot)` |
+| Role / skills | `role.md`, `skills/triage/SKILL.md` | Seeded into `bot.db` on first boot |
 | Tools | `tools/` | Empty; built-ins only (`clock.now`, `notes`, `email.send`) |
 | Theme | `theme.yaml` | GVS gold/white/Inter defaults |
-| Data | `/data/box.db` + `/data/box.key` | One SQLite DB; key is 0600 |
+| Data | `/data/bot.db` + `/data/bot.key` | One SQLite DB; key is 0600 |
 | Port | `8080` | Non-root user in the image |
 
 ## Updates and backups
 
-Pull a newer `inbox-assistant-in-a-box` (or rebuild `make build BOX=inbox-assistant`).
+Rebuild `inbox-assistant-bot:dev` after `git pull` (the `docker build` above).
 Unedited role/skill text updates from the image; text the GVS operator edited is
-kept. Back up `box.db` and `box.key` **separately**. Losing the key means
+kept. Back up `bot.db` and `bot.key` **separately**. Losing the key means
 re-entering secrets; losing only the DB means a fresh `/setup`. Delete the
 volume to start over.
 
@@ -140,3 +142,21 @@ See the [box pricing page](https://www.goldvalleysolutions.com/).
 
 Apache License 2.0. See the repository `LICENSE` and `NOTICE`.
 © 2026 Gold Valley Solutions LLC.
+
+## End-to-end tests (Playwright)
+
+`tests/e2e/` starts the bot on core from source (pinned to gvs-core-bot `9587ba7`) with
+uvicorn, a temp `/data` and the stub model, then drives it in Chromium at desktop
+(1280x800) and mobile (390x844) sizes. `verify-local.sh` runs it through
+`.verify-local.env`, and it must pass before merge.
+
+```bash
+git clone https://github.com/goldvalleysolutions/gvs-core-bot.git ../gvs-core-bot
+git -C ../gvs-core-bot checkout 9587ba7
+pip install -r ../gvs-core-bot/requirements.txt -r tests/e2e/requirements.txt
+python -m playwright install chromium
+GVS_CORE_DIR=../gvs-core-bot python -m pytest tests/e2e -q
+```
+
+When a test fails, a screenshot and a trace go to `tests/e2e/artifacts/` (gitignored).
+Open the trace with `python -m playwright show-trace <file>.trace.zip`.
