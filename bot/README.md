@@ -12,8 +12,8 @@ _Screenshot: first-boot `/setup` and the chat page after the self-test (this PR)
 Until publishing is on, build from this repo (Docker or Colima, arm64 or amd64):
 
 ```bash
-git clone git@github.com:goldvalleysolutions/gvs-box-base.git
-cd gvs-box-base
+git clone git@github.com:goldvalleysolutions/gvs-core-bot.git
+cd gvs-core-bot
 make build BOX=inbox-assistant
 docker run -d -p 8080:8080 -v inbox-assistant-data:/data inbox-assistant-in-a-box
 ```
