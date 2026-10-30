@@ -165,7 +165,7 @@ def main() -> None:
             cname,
             "python",
             "-c",
-            "import sqlite3; c=sqlite3.connect('/data/box.db'); "
+            "import sqlite3; c=sqlite3.connect('/data/bot.db'); "
             "print(c.execute(\"select value from settings where key='box_id'\").fetchone()[0])",
         ],
         text=True,

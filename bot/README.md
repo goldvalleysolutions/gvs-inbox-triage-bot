@@ -72,7 +72,7 @@ Default spend cap is **$25/month**. At the cap the box falls back to stub.
 ## Estimated monthly cost
 
 Cost ≈ (chats per day × days × turns per chat × $ per turn). Inbox Assistant's
-profile in `box.yaml` is **10 chats/day** and **4 turns/chat**. On the stub
+profile in `bot.yaml` is **10 chats/day** and **4 turns/chat**. On the stub
 model that is **$0**. On a small live model, treat $0.01–0.03 per turn as a
 planning range; the box stops live calls at the **$25** cap.
 
@@ -83,7 +83,7 @@ planning range; the box stops live calls at the **$25** cap.
 | Heavy (30 chats/day) | Long (8 turns) | up to **$25** | Cap, then stub |
 | Stub only | any | **$0** | CI and first-boot default |
 
-Keys and SMTP passwords live encrypted in `/data/box.db`. They are never in the
+Keys and SMTP passwords live encrypted in `/data/bot.db`. They are never in the
 image, the repo, or CI.
 
 ## Admin
@@ -101,18 +101,18 @@ There is no root password and no self-hoster root option. A
 
 | Item | Where | Notes |
 |---|---|---|
-| Manifest | `boxes/inbox-assistant/box.yaml` | `make lint-box BOX=inbox-assistant` |
-| Role / skills | `role.md`, `skills/triage/SKILL.md` | Seeded into `box.db` on first boot |
+| Manifest | `bot/bot.yaml` | `make lint-bot BOT=<this repo>/bot (in gvs-core-bot)` |
+| Role / skills | `role.md`, `skills/triage/SKILL.md` | Seeded into `bot.db` on first boot |
 | Tools | `tools/` | Empty; built-ins only (`clock.now`, `notes`, `email.send`) |
 | Theme | `theme.yaml` | GVS gold/white/Inter defaults |
-| Data | `/data/box.db` + `/data/box.key` | One SQLite DB; key is 0600 |
+| Data | `/data/bot.db` + `/data/bot.key` | One SQLite DB; key is 0600 |
 | Port | `8080` | Non-root user in the image |
 
 ## Updates and backups
 
 Pull a newer `inbox-assistant-in-a-box` (or rebuild `make build BOX=inbox-assistant`).
 Unedited role/skill text updates from the image; text the GVS operator edited is
-kept. Back up `box.db` and `box.key` **separately**. Losing the key means
+kept. Back up `bot.db` and `bot.key` **separately**. Losing the key means
 re-entering secrets; losing only the DB means a fresh `/setup`. Delete the
 volume to start over.
 
