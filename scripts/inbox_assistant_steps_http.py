@@ -1,248 +1,97 @@
-"""Drive the Inbox Assistant walkthrough against a running image (CI + make)."""
+"""Inbox Assistant walkthrough over web chat, the admin forms and MCP (no REST API).
+
+Usage: inbox_assistant_steps_http.py BASE SMTP_HOST SMTP_PORT CTL BOT_ID
+(CTL holds gvs_test_ed25519; its public half is installed as the bot's root key.)
+"""
 
 from __future__ import annotations
 
 import json
-import re
-import secrets
-import subprocess
 import sys
-import urllib.error
-import urllib.parse
-import urllib.request
-from http.cookiejar import CookieJar
 from pathlib import Path
 
-import httpx2
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from core.auth.token import load_private_key, public_openssh, sign_token
-from tests.mcp_helpers import call_tool, enable_mcp_http, list_tools
-
-BRAND = "Inbox Assistant in a Box"
+from steps_web import Web, fail, mcp_call, mcp_list
 
 
-def _opener() -> urllib.request.OpenerDirector:
-    return urllib.request.build_opener(urllib.request.HTTPCookieProcessor(CookieJar()))
+def admin_checks(base: str, brand: str) -> Web:
+    """Bot admin signs in; GVS root screens stay 404 for it; untested model key refused."""
+    admin = Web(base)
+    admin.admin_login()
+    for path in ("/gvs/role", "/gvs/skills", "/gvs/memory", "/gvs/activity"):
+        code, body = admin.get(path)
+        assert code == 404 and brand in body, (path, code)
+    return admin
 
 
-def request(
-    opener: urllib.request.OpenerDirector,
-    base: str,
-    method: str,
-    path: str,
-    data: dict[str, str] | bytes | None = None,
-    headers: dict[str, str] | None = None,
-) -> tuple[int, str]:
-    body: bytes | None = None
-    hdrs = dict(headers or {})
-    if isinstance(data, dict):
-        body = urllib.parse.urlencode(data).encode()
-        hdrs.setdefault("Content-Type", "application/x-www-form-urlencoded")
-    elif isinstance(data, bytes):
-        body = data
-    req = urllib.request.Request(base + path, data=body, headers=hdrs, method=method)
-    try:
-        resp = opener.open(req, timeout=20)
-        return resp.status, resp.read().decode()
-    except urllib.error.HTTPError as exc:
-        return exc.code, exc.read().decode()
-
-
-def csrf_from(html: str) -> str:
-    match = re.search(r"name=csrf value='([^']+)'", html)
-    if not match:
-        raise SystemExit("no csrf field in " + html[:400])
-    return match.group(1)
-
-
-def post_form(
-    opener: urllib.request.OpenerDirector,
-    base: str,
-    path: str,
-    fields: dict[str, str],
-    html: str | None = None,
-) -> tuple[int, str]:
-    if html is None:
-        _, html = request(opener, base, "GET", path)
-    payload = dict(fields)
-    payload["csrf"] = csrf_from(html)
-    return request(opener, base, "POST", path, payload)
-
-
-def ask(opener: urllib.request.OpenerDirector, base: str, text: str) -> dict:
-    code, raw = request(
-        opener,
-        base,
-        "POST",
-        "/api/ask",
-        json.dumps({"text": text}).encode(),
-        {"Content-Type": "application/json"},
-    )
-    if code != 200:
-        raise SystemExit(f"/api/ask {code}: {raw[:300]}")
-    return json.loads(raw)
+BRAND = "Inbox Assistant"
 
 
 def main() -> None:
-    base, smtp_port, repo, cname = sys.argv[1:5]
-    key_path = Path(repo) / "tests" / "fixtures" / "gvs_test_ed25519"
-    opener = _opener()
+    base, smtp_host, smtp_port, ctl, bot_id = sys.argv[1:6]
+    web = Web(base)
 
     print("step 1 setup")
-    code, html = request(opener, base, "GET", "/setup")
-    assert code == 200, code
-    code, _ = post_form(
-        opener,
-        base,
-        "/setup",
-        {
-            "step": "box_admin",
-            "username": "admin",
-            "password": "secret12",
-            "email": "admin@example.com",
-        },
-        html,
-    )
-    assert code in {200, 303}, code
-    code, html = request(opener, base, "GET", "/setup")
-    code, _ = post_form(
-        opener,
-        base,
-        "/setup",
-        {"step": "model", "provider": "stub", "model": "stub", "spend_cap": "25"},
-        html,
-    )
-    assert code in {200, 303}, code
-    code, html = request(opener, base, "GET", "/setup")
-    code, _ = post_form(
-        opener,
-        base,
-        "/setup",
-        {
-            "step": "connectors",
-            "SMTP_HOST": "host.docker.internal",
+    web.setup(
+        smtp={
+            "SMTP_HOST": smtp_host,
             "SMTP_PORT": smtp_port,
-            "SMTP_FROM": "box@example.com",
-        },
-        html,
+            "SMTP_FROM": "bot@example.com",
+        }
     )
-    assert code in {200, 303}, code
-    code, html = request(opener, base, "GET", "/setup")
-    if "value=wizard" in html:
-        raise SystemExit("inbox-assistant must not add a wizard step")
-    code, _ = post_form(opener, base, "/setup", {"step": "self_test"}, html)
-    assert code in {200, 303}, code
-    code, home = request(opener, base, "GET", "/")
-    assert code == 200 and BRAND in home
-    assert "Powered by Gold Valley Solutions" in home
+    code, home = web.get("/")
+    assert code == 200 and BRAND in home and "Powered by Gold Valley Solutions" in home
 
     print("step 2 clock")
-    assert ask(opener, base, "CALL clock.now {}")["blocked"] is False
+    assert web.ask("CALL clock.now {}")["blocked"] is False
 
     print("step 3 notes")
-    assert ask(opener, base, 'CALL notes {"text":"follow up invoice 1041"}')["blocked"] is False
+    assert web.ask('CALL notes {"text":"follow up invoice 1041"}')["blocked"] is False
 
     print("step 4 email")
-    ask(
-        opener,
-        base,
-        'CALL email.send {"to":"admin@example.com","subject":"Re: invoice 1041","body":"paid"}',
+    sent = web.ask(
+        'CALL email.send {"to":"admin@example.com","subject":"Re: 1041","body":"paid"}'
     )
+    assert not sent.get("error"), sent
 
     print("step 5 web blocked")
-    assert ask(opener, base, "CALL web.browse {}")["blocked"] is True
+    assert web.ask("CALL web.browse {}")["blocked"] is True
 
     print("step 6 root edit")
-    Path("/tmp/gvs_test.pub").write_text(public_openssh(load_private_key(key_path)))
-    subprocess.check_call(["docker", "cp", "/tmp/gvs_test.pub", f"{cname}:/tmp/gvs_test.pub"])
-    subprocess.check_call(
-        ["docker", "exec", "-u", "0", cname, "cp", "/tmp/gvs_test.pub", "/app/keys/gvs_root.pub"]
-    )
-    box_id = subprocess.check_output(
-        [
-            "docker",
-            "exec",
-            cname,
-            "python",
-            "-c",
-            "import sqlite3; c=sqlite3.connect('/data/bot.db'); "
-            "print(c.execute(\"select value from settings where key='box_id'\").fetchone()[0])",
-        ],
-        text=True,
-    ).strip()
-    token = sign_token(load_private_key(key_path), box_id, secrets.token_urlsafe(8))
-    code, _ = request(opener, base, "GET", "/gvs/login?token=" + token)
-    assert code in {303, 200}, code
-    code, role_html = request(opener, base, "GET", "/gvs/role")
-    assert code == 200, code
-    code, _ = post_form(
-        opener,
-        base,
+    web.root_login(Path(ctl) / "gvs_test_ed25519", bot_id)
+    web.form(
         "/gvs/role",
-        {"text": "You are Maple Inbox, a maple-shop clerk. You do not browse the web."},
-        role_html,
+        {"text": "You are Maple Inbox, a maple-shop clerk. You do not browse."},
     )
-    assert code in {200, 303}, code
-    assert "Maple Inbox" in ask(opener, base, "who are you?")["text"]
+    assert "Maple Inbox" in web.ask("who are you?")["text"]
 
-    print("step 7 box admin 404")
-    admin = _opener()
-    code, login_html = request(admin, base, "GET", "/admin/login")
-    assert code == 200
-    code, _ = post_form(
-        admin,
-        base,
-        "/admin/login",
-        {"username": "admin", "password": "secret12"},
-        login_html,
-    )
-    assert code in {200, 303}, code
-    for path in ("/gvs/role", "/gvs/skills", "/gvs/memory", "/gvs/activity"):
-        code, body = request(admin, base, "GET", path)
-        assert code == 404, (path, code)
-        assert BRAND in body
+    print("step 7 bot admin: root screens 404")
+    admin = admin_checks(base, BRAND)
 
-    print("step 8 model switch (dummy key, then stub)")
-    code, settings_html = request(admin, base, "GET", "/admin")
-    assert code == 200
-    code, _ = post_form(
-        admin,
-        base,
-        "/admin/settings",
-        {
-            "provider": "openai_compat",
-            "model": "gpt-4o-mini",
-            "api_key": "sk-not-a-real-key",
-        },
-        settings_html,
-    )
-    assert code in {200, 303}, code
-    code, settings_html = request(admin, base, "GET", "/admin")
-    assert "sk-not-a-real-key" not in settings_html
-    code, _ = post_form(
-        admin, base, "/admin/settings", {"provider": "stub", "model": "stub"}, settings_html
-    )
-    assert code in {200, 303}, code
+    print("step 8 model switch (untested key refused, then stub)")
+    admin.model_switch_gated()
+
     print("step 9 mcp")
-    http = httpx2.Client(base_url=base, follow_redirects=True, timeout=30.0)
-    token = enable_mcp_http(http, mode="read_only", name="inbox")
-    names = list_tools(f"{base}/mcp", token)
+    token = admin.enable_mcp("read_only", "inbox")
+    names = mcp_list(base, token)
     assert "ask" in names and "email.send" not in names, names
-    asked = call_tool(f"{base}/mcp", token, "ask", {"text": "ping"})
+    asked = mcp_call(base, token, "ask", {"text": "ping"})
     assert "(stub)" in asked or "ping" in asked, asked
-    http.post("/api/admin/mcp", json={"mode": "write_with_approval"}).raise_for_status()
+    admin.set_mcp_access("write_with_approval")
     pending = json.loads(
-        call_tool(
-            f"{base}/mcp",
+        mcp_call(
+            base,
             token,
             "email.send",
             {"to": "admin@example.com", "subject": "invoice", "body": "draft reply"},
         )
     )
-    assert pending["status"] == "pending_approval", pending
-    approved = http.post(f"/api/approvals/{pending['id']}/approve").json()
-    assert approved["status"] == "approved", approved
-    http.close()
+    if pending.get("status") != "pending_approval":
+        fail(f"expected pending_approval: {pending}")
+    admin.approve(pending["id"])
+    _, approvals = admin.get("/admin/approvals")
+    assert pending["id"] not in approvals, "approval still pending"
     print("OK inbox-assistant-steps")
 
 
