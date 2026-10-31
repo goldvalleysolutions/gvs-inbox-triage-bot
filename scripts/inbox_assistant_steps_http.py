@@ -1,4 +1,4 @@
-"""Inbox Assistant walkthrough over web chat, the admin forms and MCP (no REST API).
+"""Inbox Triage Bot walkthrough over web chat, the admin forms and MCP (no REST API).
 
 Usage: inbox_assistant_steps_http.py BASE SMTP_HOST SMTP_PORT CTL BOT_ID
 (CTL holds gvs_test_ed25519; its public half is installed as the bot's root key.)
@@ -25,7 +25,7 @@ def admin_checks(base: str, brand: str) -> Web:
     return admin
 
 
-BRAND = "Inbox Assistant"
+BRAND = "Inbox Triage Bot"
 
 
 def main() -> None:
@@ -41,7 +41,7 @@ def main() -> None:
         }
     )
     code, home = web.get("/")
-    assert code == 200 and BRAND in home and "Powered by Gold Valley Solutions" in home
+    assert code == 200 and BRAND in home and "in a Box" not in home and "Powered by Gold Valley Solutions" in home
 
     print("step 2 clock")
     assert web.ask("CALL clock.now {}")["blocked"] is False
