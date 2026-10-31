@@ -1,7 +1,7 @@
-# Inbox Assistant in a Box
+# Inbox Triage Bot
 
-A small-business inbox clerk that proves a product role from `new-box`: the
-owner pastes an email, the box triages it and drafts a reply. One image,
+A small-business inbox clerk that proves a product role from `make new-bot`: the
+owner pastes an email, the bot triages it and drafts a reply. One image,
 `/setup`, memory, allowlisted tools, and the Gold Valley Solutions gold theme.
 There is no IMAP or POP — the owner provides the message.
 
@@ -25,7 +25,7 @@ docker run -d -p 8080:8080 -v inbox-assistant-data:/data inbox-assistant-bot:dev
 The Dockerfile copies `bot/` to `/bot/` on top of the pinned core; no RUN steps.
 
 Open <http://localhost:8080>. Every page redirects to **`/setup`** until you finish
-it. Create the box-admin login, leave the LLM on **stub** (no key, $0), enter SMTP
+it. Create the bot-admin login, leave the LLM on **stub** (no key, $0), enter SMTP
 only if you want `email.send`, then run the self-test.
 `curl -f http://localhost:8080/health` works before and after setup.
 
@@ -46,9 +46,9 @@ server (never a real mailbox) on amd64 and arm64. Stub LLM only — no provider 
    receives it; the activity log records `email.send`.
 6. **Web browse blocked** — ask it to search the web. The call is refused and
    logged `blocked` / `not_allowed`.
-7. **Box admin 404** — as box admin, `/gvs/role`, `/gvs/skills`, `/gvs/memory`
+7. **Bot admin 404** — as bot admin, `/gvs/role`, `/gvs/skills`, `/gvs/memory`
    and `/gvs/activity` are 404.
-8. **MCP** — in box admin, turn MCP on in **read only**, issue a token. An MCP
+8. **MCP** — in bot admin, turn MCP on in **read only**, issue a token. An MCP
    client at `/mcp` can `ask` and `tools/list` (no `email.send`). Switch to
    **write with approval**, request a send, approve it. Fake SMTP receives the
    mail. See [docs/mcp.md](../../docs/mcp.md).
@@ -69,14 +69,14 @@ server (never a real mailbox) on amd64 and arm64. Stub LLM only — no provider 
 | Live | A key from Anthropic, OpenAI, OpenRouter, or xAI, entered on `/setup` or in admin. Never committed. |
 | Email | SMTP host/port (and user/password/from if the server needs them). CI uses a fake server. No IMAP or POP. |
 
-Default spend cap is **$25/month**. At the cap the box falls back to stub.
+Default spend cap is **$25/month**. At the cap the bot falls back to stub.
 
 ## Estimated monthly cost
 
-Cost ≈ (chats per day × days × turns per chat × $ per turn). Inbox Assistant's
+Cost ≈ (chats per day × days × turns per chat × $ per turn). Inbox Triage Bot's
 profile in `bot.yaml` is **10 chats/day** and **4 turns/chat**. On the stub
 model that is **$0**. On a small live model, treat $0.01–0.03 per turn as a
-planning range; the box stops live calls at the **$25** cap.
+planning range; the bot stops live calls at the **$25** cap.
 
 | How often | How chatty | Est. / month (live) | Notes |
 |---|---|---|---|
@@ -90,7 +90,7 @@ image, the repo, or CI.
 
 ## Admin
 
-| | Box admin (you create on `/setup`) | GVS operator (`gvs-root` token) |
+| | Bot admin (you create on `/setup`) | GVS operator (`gvs-root` token) |
 |---|---|---|
 | LLM provider, model, API key | ✅ | ✅ |
 | SMTP, allowlist, spend cap, theme, MCP | ✅ | ✅ |
@@ -136,7 +136,7 @@ server.
 ## Help and paid services
 
 Gold Valley Solutions offers paid **setup, configuration, training and hosting**.
-See the [box pricing page](https://www.goldvalleysolutions.com/).
+See the [Gold Valley Bots pricing page](https://www.goldvalleysolutions.com/pricing/gold-valley-bots.html).
 
 ## License
 

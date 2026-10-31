@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Inbox Assistant in a Box: generated role image = a pinned core-bot base + this /bot folder.
+# Inbox Triage Bot: generated role image = a pinned core-bot base + this /bot folder.
 # Copy-only: no RUN that changes core (B1, AC-14). Same layering as Hello.
 #   Build from the repo root: docker build -f bot/Dockerfile -t inbox-assistant-bot:dev .
 #   Needs `docker login ghcr.io` (core-bot is private). Override CORE_IMAGE to use a
@@ -11,7 +11,7 @@ FROM ${CORE_IMAGE}
 ARG CORE=0.3
 ARG CORE_IMAGE
 ARG IMAGE_TAG=inbox-assistant-bot:dev
-LABEL org.opencontainers.image.title="Inbox Assistant in a Box" \
+LABEL org.opencontainers.image.title="Inbox Triage Bot" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.base.name="core-bot:${CORE}"
 ENV GVS_IMAGE_TAG=${IMAGE_TAG}

@@ -1,4 +1,4 @@
-"""Inbox Assistant e2e: setup, chat with its tools, MCP (desktop + mobile)."""
+"""Inbox Triage Bot e2e: setup, chat with its tools, MCP (desktop + mobile)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from playwright.sync_api import Page, expect
 from steps_web import mcp_list
 from ui import admin_web, chat, mcp_initialize, setup_ui
 
-BRAND = "Inbox Assistant"
+BRAND = "Inbox Triage Bot"
 HTTP_SETUP = {"smtp": True}
 
 
@@ -18,6 +18,7 @@ def test_setup(page: Page, fresh_bot, smtp) -> None:
     assert seen == ["bot_admin", "access", "model", "connectors", "self_test"], seen
     page.goto(fresh_bot.base + "/")
     expect(page.locator("body")).to_contain_text(BRAND)
+    expect(page.locator("body")).not_to_contain_text("in a Box")
     expect(page.locator("body")).to_contain_text("Powered by Gold Valley Solutions")
     assert not page.js_errors
 
