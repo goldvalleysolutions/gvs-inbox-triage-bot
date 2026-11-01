@@ -9,27 +9,31 @@ _Screenshot: first-boot `/setup` and the chat page after the self-test (this PR)
 
 ## Up and running in 5 minutes
 
-The core image `ghcr.io/goldvalleysolutions/core-bot` is private on GHCR. Create a GitHub
-token with `read:packages`, then build this bot `FROM ghcr.io/goldvalleysolutions/core-bot:${CORE}`
-(`CORE=0.3`, never `latest`) from the repo root (Docker or Colima, arm64 or amd64):
+Pull and run (only Docker needed; amd64 or arm64). The image is published to Docker Hub as
+`goldvalleysolutions/inbox-triage-bot` when Mike merges `test` into `main`; until then, build
+it locally as shown below.
 
 ```bash
-echo YOUR_PAT | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
-
-git clone git@github.com:goldvalleysolutions/gvs-inbox-assistant-bot.git
-cd gvs-inbox-assistant-bot
-docker build -f bot/Dockerfile --build-arg CORE=0.3 -t inbox-assistant-bot:dev .
-docker run -d -p 8080:8080 -v inbox-assistant-data:/data inbox-assistant-bot:dev
+docker pull goldvalleysolutions/inbox-triage-bot:0.1
+docker run -d -p 8080:8080 -v inbox-triage-data:/data goldvalleysolutions/inbox-triage-bot:0.1
 ```
 
-The Dockerfile copies `bot/` to `/bot/` on top of the pinned core; no RUN steps.
+Build locally (developers): the Dockerfile is `FROM goldvalleysolutions/core-bot:${CORE}`
+(`CORE=0.3`, never `latest`) and only copies `bot/` to `/bot/` (no RUN steps).
+This repo is being renamed to `gvs-inbox-triage-bot`; the current URL below will redirect after the rename.
+
+```bash
+git clone https://github.com/goldvalleysolutions/gvs-inbox-assistant-bot.git
+cd gvs-inbox-assistant-bot
+docker build -f bot/Dockerfile --build-arg CORE=0.3 -t inbox-triage-bot:dev .
+docker run -d -p 8080:8080 -v inbox-triage-data:/data inbox-triage-bot:dev
+```
 
 Open <http://localhost:8080>. Every page redirects to **`/setup`** until you finish
 it. Create the bot-admin login, leave the LLM on **stub** (no key, $0), enter SMTP
 only if you want `email.send`, then run the self-test.
 `curl -f http://localhost:8080/health` works before and after setup.
 
-There is no published image for this bot yet; build it locally as above.
 
 ### Try it (stub, CI)
 
@@ -112,7 +116,7 @@ There is no root password and no self-hoster root option. A
 
 ## Updates and backups
 
-Rebuild `inbox-assistant-bot:dev` after `git pull` (the `docker build` above).
+Rebuild `inbox-triage-bot:dev` after `git pull` (the `docker build` above).
 Unedited role/skill text updates from the image; text the GVS operator edited is
 kept. Back up `bot.db` and `bot.key` **separately**. Losing the key means
 re-entering secrets; losing only the DB means a fresh `/setup`. Delete the

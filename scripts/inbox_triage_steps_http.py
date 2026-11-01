@@ -1,6 +1,6 @@
 """Inbox Triage Bot walkthrough over web chat, the admin forms and MCP (no REST API).
 
-Usage: inbox_assistant_steps_http.py BASE SMTP_HOST SMTP_PORT CTL BOT_ID
+Usage: inbox_triage_steps_http.py BASE SMTP_HOST SMTP_PORT CTL BOT_ID
 (CTL holds gvs_test_ed25519; its public half is installed as the bot's root key.)
 """
 
@@ -91,7 +91,7 @@ def main() -> None:
     if pending.get("status") not in {"pending_approval", "approval_required"}:
         fail(f"expected pending_approval: {pending}")
     assert admin.approve(pending["id"]) == "approved", "approval did not run"
-    print("OK inbox-assistant-steps")
+    print("OK inbox-triage-steps")
 
 
 if __name__ == "__main__":

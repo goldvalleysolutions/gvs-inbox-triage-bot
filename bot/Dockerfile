@@ -1,16 +1,16 @@
 # syntax=docker/dockerfile:1
 # Inbox Triage Bot: generated role image = a pinned core-bot base + this /bot folder.
 # Copy-only: no RUN that changes core (B1, AC-14). Same layering as Hello.
-#   Build from the repo root: docker build -f bot/Dockerfile -t inbox-assistant-bot:dev .
-#   Needs `docker login ghcr.io` (core-bot is private). Override CORE_IMAGE to use a
+#   Build from the repo root: docker build -f bot/Dockerfile -t inbox-triage-bot:dev .
+#   Base is the public Docker Hub core. Override CORE_IMAGE to use a
 #   locally built core (e.g. --build-arg CORE_IMAGE=core-bot:${CORE}).
 # CORE pins the core as X.Y (never latest); it must equal `core:` in bot.yaml.
 ARG CORE=0.3
-ARG CORE_IMAGE=ghcr.io/goldvalleysolutions/core-bot:${CORE}
+ARG CORE_IMAGE=goldvalleysolutions/core-bot:${CORE}
 FROM ${CORE_IMAGE}
 ARG CORE=0.3
 ARG CORE_IMAGE
-ARG IMAGE_TAG=inbox-assistant-bot:dev
+ARG IMAGE_TAG=inbox-triage-bot:dev
 LABEL org.opencontainers.image.title="Inbox Triage Bot" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.base.name="core-bot:${CORE}"
