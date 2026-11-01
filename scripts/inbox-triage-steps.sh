@@ -3,15 +3,15 @@
 # No REST API: the driver uses web chat, the admin forms (with CSRF) and the MCP client.
 # It runs inside the image so core.auth.token / mcp / httpx2 / cryptography come from core.
 # The Playwright suite in tests/e2e is the required pre-merge check; this checks the image.
-# Usage: scripts/inbox-assistant-steps.sh <image> [host-port]
+# Usage: scripts/inbox-triage-steps.sh <image> [host-port]
 set -euo pipefail
 
-image="${1:?usage: scripts/inbox-assistant-steps.sh <image> [port]}"
+image="${1:?usage: scripts/inbox-triage-steps.sh <image> [port]}"
 port="${2:-18084}"
-name="inbox-assistant-steps-$(echo "$image" | tr -c 'a-zA-Z0-9' '-')$$"
+name="inbox-triage-steps-$(echo "$image" | tr -c 'a-zA-Z0-9' '-')$$"
 vol="${name}-data"
 here="$(cd "$(dirname "$0")/.." && pwd)"
-ctl="$(mktemp -d "${TMPDIR:-/tmp}/inbox-assistant-steps.XXXXXX")"
+ctl="$(mktemp -d "${TMPDIR:-/tmp}/inbox-triage-steps.XXXXXX")"
 smtp_pid=""
 
 cleanup() {
@@ -56,4 +56,4 @@ bot_id="$(docker exec "$name" python -c "import sqlite3; c=sqlite3.connect('/dat
 [[ -n "$bot_id" ]] || fail "no bot_id in /data/bot.db"
 
 in_image --network "container:${name}" "$image" \
-  python /steps/inbox_assistant_steps_http.py http://127.0.0.1:8080 host.docker.internal "$smtp_port" /ctl "$bot_id"
+  python /steps/inbox_triage_steps_http.py http://127.0.0.1:8080 host.docker.internal "$smtp_port" /ctl "$bot_id"
