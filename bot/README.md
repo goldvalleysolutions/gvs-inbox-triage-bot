@@ -20,10 +20,11 @@ docker run -d -p 8080:8080 -v inbox-triage-data:/data goldvalleysolutions/inbox-
 
 Build locally (developers): the Dockerfile is `FROM goldvalleysolutions/core-bot:${CORE}`
 (`CORE=0.3`, never `latest`) and only copies `bot/` to `/bot/` (no RUN steps).
+This repo is being renamed to `gvs-inbox-triage-bot`; the current URL below will redirect after the rename.
 
 ```bash
-git clone https://github.com/goldvalleysolutions/gvs-inbox-triage-bot.git
-cd gvs-inbox-triage-bot
+git clone https://github.com/goldvalleysolutions/gvs-inbox-assistant-bot.git
+cd gvs-inbox-assistant-bot
 docker build -f bot/Dockerfile --build-arg CORE=0.3 -t inbox-triage-bot:dev .
 docker run -d -p 8080:8080 -v inbox-triage-data:/data inbox-triage-bot:dev
 ```

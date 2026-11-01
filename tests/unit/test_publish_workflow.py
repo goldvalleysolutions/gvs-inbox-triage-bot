@@ -76,3 +76,14 @@ def test_actions_pinned_and_no_latest() -> None:
         if "uses" in s:
             assert re.fullmatch(r"[\w./-]+@[0-9a-f]{40}", s["uses"]), s["uses"]
     assert ":latest" not in TEXT
+
+
+def test_image_name_exact() -> None:
+    names = set(re.findall(r"(goldvalleysolutions/[\w.-]+bot):", TEXT)) - {"goldvalleysolutions/core-bot"}
+    names |= {f"goldvalleysolutions/{m}" for m in re.findall(r"\$\{\{ steps\.mode\.outputs\.ns \}\}/([\w.-]+):", TEXT)}
+    assert names == {"goldvalleysolutions/inbox-triage-bot"}
+    assert "ns=goldvalleysolutions;" in MODE["run"]
+
+
+def test_main_publish_never_cancelled_in_progress() -> None:
+    assert DOC["concurrency"]["cancel-in-progress"] == "${{ github.event_name != 'push' }}"
