@@ -1,4 +1,4 @@
-# Inbox Assistant Bot
+# Inbox Triage Bot
 
 An inbox clerk: paste in an email and the bot triages it and drafts a reply.
 
