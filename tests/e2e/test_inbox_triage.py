@@ -8,6 +8,8 @@ tool, web browse refused, MCP not exposing send to read-only tokens.
 
 from __future__ import annotations
 
+import json
+import sqlite3
 import time
 
 from conftest import smtp_fields
@@ -78,8 +80,22 @@ def test_brief_read_only(page: Page, ready_bot, mail) -> None:
 def test_brief_now_job(page: Page, ready_bot, mail) -> None:
     _seed(mail)
     page.goto(ready_bot.base + "/")
+    ready_bot.set_setting("inbox.last_brief", "")
     reply = chat(page, "CALL brief.now {}")
     assert "error" not in (reply.get_attribute("class") or ""), reply.inner_text()
+    assert "Started the daily brief" in reply.inner_text()
+    deadline = time.time() + 15
+    saved = None
+    while not saved and time.time() < deadline:
+        with sqlite3.connect(ready_bot.data / "bot.db") as db:
+            row = db.execute(
+                "select value from settings where key='inbox.last_brief'"
+            ).fetchone()
+        saved = row[0] if row and row[0] else None
+        time.sleep(0.2)
+    assert saved, "brief.now saved no brief"
+    brief = json.loads(saved)
+    assert "Needs a reply" in brief["text"] and brief["items"], brief["text"][:200]
     assert not _inbox_writes(mail), mail.imap.writes
 
 

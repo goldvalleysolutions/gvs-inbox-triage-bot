@@ -80,7 +80,7 @@ _NOW = re.compile(
 )
 _TODAY = re.compile(
     r"\btoday\b|by (end of )?day|\beod\b|tomorrow|deadline|by (mon|tues|wednes|thurs|fri)day|"
-    r"please (confirm|reply|let me know|approve)|can you|could you|\?",
+    r"please (confirm|reply|let me know|approve)|asap|end of (the )?day",
     re.IGNORECASE,
 )
 _ASK = re.compile(
@@ -208,13 +208,19 @@ def summarize(msg: dict[str, Any]) -> str:
 _ORDER = {u: i for i, u in enumerate(URGENCY)}
 
 
+def _uid(row: dict[str, Any]) -> int:
+    """Numeric uid for sorting; a missing or non-numeric uid sorts last instead of crashing."""
+    raw = str(row.get("uid") or "").strip()
+    return int(raw) if raw.isdigit() else 0
+
+
 def build_brief(store: Any) -> dict[str, Any]:
     """Sync, purge past retention, classify every cached message, render the brief."""
     new = sync(store)
     purge(store)
     rows = sorted(
         (classify(m) for m in _cache(store).values()),
-        key=lambda r: (_ORDER[r["urgency"]], -int(r["uid"] or 0)),
+        key=lambda r: (_ORDER[r["urgency"]], -_uid(r)),
     )
     stamp = time.strftime("%a %b %d, %I:%M %p", time.localtime())
     lines = [f"Daily brief — {stamp} ({len(rows)} messages, {new} new)", ""]
@@ -249,9 +255,7 @@ def last_brief(store: Any) -> dict[str, Any] | None:
 # --- tools ---------------------------------------------------------------------------------
 def mail_list(store: Any, limit: int = 20, **_: Any) -> str:
     sync(store)
-    rows = sorted(_cache(store).values(), key=lambda m: -int(m["uid"]))[
-        : max(1, int(limit))
-    ]
+    rows = sorted(_cache(store).values(), key=lambda m: -_uid(m))[: max(1, int(limit))]
     out = []
     for m in rows:
         c = classify(m)

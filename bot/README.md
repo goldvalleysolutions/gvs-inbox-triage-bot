@@ -7,8 +7,6 @@ allowlisted tools, and the Gold Valley Solutions gold theme.
 
 > Renamed: this repo was `gvs-inbox-assistant-bot`; it is now `gvs-inbox-triage-bot` (image `goldvalleysolutions/inbox-triage-bot`).
 
-_Screenshot: first-boot `/setup` and the chat page after the self-test (this PR)._
-
 ## Up and running in 5 minutes
 
 Pull and run (only Docker needed; amd64 or arm64). The image is published to Docker Hub as
@@ -132,7 +130,8 @@ There is no root password and no self-hoster root option. A
 
 ## Updates and backups
 
-Rebuild `inbox-triage-bot:dev` after `git pull` (the `docker build` above).
+Update with `docker pull goldvalleysolutions/inbox-triage-bot:0.2`, then `docker rm -f inbox-triage`
+and re-run the same `docker run` command (the `inbox-triage-data` volume keeps your data).
 Unedited role/skill text updates from the image; text the GVS operator edited is
 kept. Back up `bot.db` and `bot.key` **separately**. Losing the key means
 re-entering secrets; losing only the DB means a fresh `/setup`. Delete the
@@ -148,7 +147,8 @@ don't process patient health information.
 refused and logged.
 
 **Does it read my mailbox?** Yes, read-only. It never marks, moves or deletes mail.
-The only write is a copy of a reply you approved, saved to Sent.
+The only writes are copies saved to Sent: a reply you approved and, if you turn on
+"Email the brief to me", the daily brief email.
 
 **Can it send on its own?** No. Every `email.send` waits for your Approve click, and
 instructions inside an email never trigger a tool.

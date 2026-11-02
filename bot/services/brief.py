@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 
 _NAME = "gvs_inbox_triage"
+EMAIL_ERROR_KEY = "inbox.brief_email_error"
 
 
 def _inbox() -> Any:
@@ -56,8 +58,13 @@ def daily_brief(ctx: Any) -> str:
                 actor="job",
                 source="job",
             )
+            store.set_setting(EMAIL_ERROR_KEY, "")
         except Exception as exc:  # noqa: BLE001  a failed email never fails the brief
             store.log("job", "brief.email", f"result=error {type(exc).__name__}", "job")
+            # Shown on the Brief page until the next successful send.
+            store.set_setting(
+                EMAIL_ERROR_KEY, f"{time.strftime('%b %d %I:%M %p')}: {exc}"
+            )
     return brief["text"]
 
 
@@ -79,11 +86,19 @@ def brief_page(request: Request) -> Any:
         else "No brief yet. Use Run now, or say “brief me” in chat."
     )
     checked = " checked" if store.get_setting(inbox.EMAIL_SELF_KEY) == "1" else ""
+    err = store.get_setting(EMAIL_ERROR_KEY) or ""
+    warn = (
+        f"<p id=brief-email-error class=error role=alert>The brief email failed: {esc(err)}</p>"
+        if err
+        else ""
+    )
     tok = csrf.token(request)
     hidden = f"<input type=hidden name=csrf value='{esc(tok)}'>"
     body = (
         "<h1>Inbox brief</h1>"
-        f"<pre id=brief style='white-space:pre-wrap'>{esc(text)}</pre>"
+        + warn
+        # Lines as <br>-joined text (not <pre>): wraps at 390px; CSP forbids inline styles.
+        + f"<div id=brief class=brief>{'<br>'.join(esc(x) for x in text.splitlines())}</div>"
         f"<form method=post action=/r/inbox-triage/brief/settings>{hidden}"
         f"<label><input type=checkbox id=email_self name=email_self value=1{checked}> "
         "Email the brief to me</label> "
