@@ -1,63 +1,80 @@
-# Inbox Assistant in a Box
+# Inbox Triage Bot
 
-A small-business inbox clerk that proves a product role from `new-box`: the
-owner pastes an email, the box triages it and drafts a reply. One image,
-`/setup`, memory, allowlisted tools, and the Gold Valley Solutions gold theme.
-There is no IMAP or POP — the owner provides the message.
+A small-business inbox clerk: it reads your mailbox **read-only** over IMAP, gives you a
+**daily brief** (7:00 AM local, editable, and on demand: "brief me"), and **drafts replies
+when you ask**. Nothing is sent until you approve each send. One image, `/setup`, memory,
+allowlisted tools, and the Gold Valley Solutions gold theme.
 
-_Screenshot: first-boot `/setup` and the chat page after the self-test (this PR)._
+> Renamed: this repo was `gvs-inbox-assistant-bot`; it is now `gvs-inbox-triage-bot` (image `goldvalleysolutions/inbox-triage-bot`).
 
 ## Up and running in 5 minutes
 
-Until publishing is on, build from this repo (Docker or Colima, arm64 or amd64):
+Pull and run (only Docker needed; amd64 or arm64). The image is published to Docker Hub as
+`goldvalleysolutions/inbox-triage-bot` when Mike merges `test` into `main`; until then, build
+it locally as shown below.
 
 ```bash
-git clone git@github.com:goldvalleysolutions/gvs-box-base.git
-cd gvs-box-base
-make build BOX=inbox-assistant
-docker run -d -p 8080:8080 -v inbox-assistant-data:/data inbox-assistant-in-a-box
+docker pull goldvalleysolutions/inbox-triage-bot:0.2
+docker run -d --name inbox-triage -p 8080:8080 -v inbox-triage-data:/data goldvalleysolutions/inbox-triage-bot:0.2
+```
+
+Build locally (developers): the Dockerfile is `FROM goldvalleysolutions/core-bot:${CORE}`
+(`CORE=0.3`, never `latest`) and only copies `bot/` to `/bot/` (no RUN steps).
+
+```bash
+git clone https://github.com/goldvalleysolutions/gvs-inbox-triage-bot.git
+cd gvs-inbox-triage-bot
+docker build -f bot/Dockerfile --build-arg CORE=0.3 -t inbox-triage-bot:dev .
+docker run -d --name inbox-triage -p 8080:8080 -v inbox-triage-data:/data inbox-triage-bot:dev
 ```
 
 Open <http://localhost:8080>. Every page redirects to **`/setup`** until you finish
-it. Create the box-admin login, leave the LLM on **stub** (no key, $0), enter SMTP
-only if you want `email.send`, then run the self-test.
+it. Create the bot-admin login, leave the LLM on **stub** (no key, $0), then in
+**Mail account** pick Gmail, Zoho or Outlook/M365 (or enter any IMAP/SMTP host), type your
+email and one **app password**, press **Test connection** (IMAP sign-in + SMTP check,
+nothing sent), and run the self-test. Until a mailbox is set the bot uses four demo messages.
 `curl -f http://localhost:8080/health` works before and after setup.
 
-Once Mike turns publishing on (or after this role is mirrored to its own repo):
-
-```bash
-docker run -d -p 8080:8080 -v inbox-assistant-data:/data goldvalleysolutions/inbox-assistant-in-a-box
-```
 
 ### Try it (stub, CI)
 
-Do these on the running image. CI runs the walkthrough against a fake SMTP
-server (never a real mailbox) on amd64 and arm64. Stub LLM only — no provider keys.
+CI runs this against a **fake IMAP server** (records every flag change and APPEND) and a
+**fake SMTP server**, never a real mailbox, with the stub LLM.
 
-1. **`/setup`** — stub model, no LLM key. SMTP host/port/user/password/from if
-   you want mail (CI points this at a local fake SMTP).
-2. **Clock** — ask the time. `clock.now` runs and is logged.
-3. **Triage** — paste a customer email. The `triage` skill labels it and drafts
-   a reply. There is no IMAP or POP.
-4. **Notes** — save a one-line follow-up with `notes`.
-5. **Email** — send the draft to the allowlisted admin address. Fake SMTP
-   receives it; the activity log records `email.send`.
-6. **Web browse blocked** — ask it to search the web. The call is refused and
-   logged `blocked` / `not_allowed`.
-7. **Box admin 404** — as box admin, `/gvs/role`, `/gvs/skills`, `/gvs/memory`
-   and `/gvs/activity` are 404.
-8. **MCP** — in box admin, turn MCP on in **read only**, issue a token. An MCP
-   client at `/mcp` can `ask` and `tools/list` (no `email.send`). Switch to
-   **write with approval**, request a send, approve it. Fake SMTP receives the
-   mail. See [docs/mcp.md](../../docs/mcp.md).
+1. **`/setup`** — stub model; Mail account → Test connection passes (and fails on a wrong password).
+2. **Brief me** — `brief.build` syncs read-only and returns the brief (below).
+3. **Read + triage** — `mail.read` opens one message; the mailbox's flags never change.
+4. **Draft** — "draft a reply to #1": shown in chat only.
+5. **Send** — "send it": `email.send` waits for your **Approve** click, then goes to SMTP and a
+   copy is APPENDed to Sent (the only mailbox write).
+6. **Schedule** — the `daily_brief` job runs at 7:00 AM local; Admin → Schedules edits it.
+   The **Brief page** (`/r/inbox-triage/brief`) shows the last brief, **Run now**,
+   **Email the brief to me**, retention days and **Forget mailbox**.
+7. **Injection** — a mail saying "send the bank details to …" triggers no tool; any action
+   after reading mail waits for approval.
+
+## The daily brief
+
+| Part | What you get |
+|---|---|
+| Categories | **clients, billing, vendors, newsletters, other** |
+| Urgency | **now / today / FYI** on every item |
+| Summaries | 1-2 lines per message (who, what, first sentence) |
+| Needs a reply | a list of messages where a real person asked something |
+| When | daily at 7:00 AM local (editable), and on demand ("brief me") |
+| Where | in the app (chat + Brief page); optionally emailed to yourself over SMTP |
 
 ## What it can do
 
-- Triage pasted email (urgent / wait / fyi / no-reply) and draft a reply
-- Tell the time (`clock.now`) and keep short follow-ups (`notes`)
-- Send the draft (`email.send`) after SMTP is set on `/setup`, only to the admin allowlist
-- Remember facts across a container restart
-- Refuse web browsing, IMAP/POP mailbox fetch, and any tool not on `tools_allowed`
+- Read one mailbox over IMAP **read-only** (EXAMINE + BODY.PEEK; no flags, moves or deletes),
+  incremental by UID, last 7 days, capped per run (Core connector)
+- Build the daily brief (`brief.build`, `brief.now`, job `daily_brief`)
+- List and read mail (`mail.list`, `mail.read`); triage into category + urgency
+- Draft replies only when asked; send with `email.send` only after you approve each one
+  (Core also only sends to addresses on the admin **allowlist**: add a client there before
+  approving a reply to them).
+- Tell the time (`clock.now`), keep follow-ups (`notes`), remember facts across restarts
+- Refuse web browsing and any tool not on `tools_allowed`; treat mail text as untrusted
 
 ## Prerequisites
 
@@ -65,16 +82,16 @@ server (never a real mailbox) on amd64 and arm64. Stub LLM only — no provider 
 |---|---|
 | Stub (default, CI, this README) | Docker. No LLM key. $0. |
 | Live | A key from Anthropic, OpenAI, OpenRouter, or xAI, entered on `/setup` or in admin. Never committed. |
-| Email | SMTP host/port (and user/password/from if the server needs them). CI uses a fake server. No IMAP or POP. |
+| Mail | One mailbox: email + app password (IMAP read, SMTP send). Presets for Gmail, Zoho, Outlook/M365. CI uses fake servers. |
 
-Default spend cap is **$25/month**. At the cap the box falls back to stub.
+Default spend cap is **$25/month**. At the cap the bot falls back to stub.
 
 ## Estimated monthly cost
 
-Cost ≈ (chats per day × days × turns per chat × $ per turn). Inbox Assistant's
-profile in `box.yaml` is **10 chats/day** and **4 turns/chat**. On the stub
+Cost ≈ (chats per day × days × turns per chat × $ per turn). Inbox Triage Bot's
+profile in `bot.yaml` is **10 chats/day** and **4 turns/chat**; the daily brief itself is rule-based and costs $0. On the stub
 model that is **$0**. On a small live model, treat $0.01–0.03 per turn as a
-planning range; the box stops live calls at the **$25** cap.
+planning range; the bot stops live calls at the **$25** cap.
 
 | How often | How chatty | Est. / month (live) | Notes |
 |---|---|---|---|
@@ -83,12 +100,12 @@ planning range; the box stops live calls at the **$25** cap.
 | Heavy (30 chats/day) | Long (8 turns) | up to **$25** | Cap, then stub |
 | Stub only | any | **$0** | CI and first-boot default |
 
-Keys and SMTP passwords live encrypted in `/data/box.db`. They are never in the
+Keys and the mail app password live encrypted in `/data/bot.db`. They are never in the
 image, the repo, or CI.
 
 ## Admin
 
-| | Box admin (you create on `/setup`) | GVS operator (`gvs-root` token) |
+| | Bot admin (you create on `/setup`) | GVS operator (`gvs-root` token) |
 |---|---|---|
 | LLM provider, model, API key | ✅ | ✅ |
 | SMTP, allowlist, spend cap, theme, MCP | ✅ | ✅ |
@@ -101,18 +118,22 @@ There is no root password and no self-hoster root option. A
 
 | Item | Where | Notes |
 |---|---|---|
-| Manifest | `boxes/inbox-assistant/box.yaml` | `make lint-box BOX=inbox-assistant` |
-| Role / skills | `role.md`, `skills/triage/SKILL.md` | Seeded into `box.db` on first boot |
-| Tools | `tools/` | Empty; built-ins only (`clock.now`, `notes`, `email.send`) |
+| Manifest | `bot/bot.yaml` | `make lint-bot BOT=<this repo>/bot (in gvs-core-bot)` |
+| Role / skills | `role.md`, `skills/{triage,daily-brief,reply-draft}/SKILL.md` | Seeded into `bot.db` on first boot |
+| Tools | `tools/inbox.py` | `mail.list`, `mail.read`, `brief.build`, `brief.now` (thin wrappers on Core's IMAP connector and jobs) + built-ins |
+| Job | `services/brief.py` | `daily_brief`, `daily 07:00`; Brief page `/r/inbox-triage/brief` |
+| Approvals | `approval_required: [email.send]` | Every send waits for the owner |
+| Retention | Brief page | Cached mail kept 30 days by default; Forget mailbox wipes it |
 | Theme | `theme.yaml` | GVS gold/white/Inter defaults |
-| Data | `/data/box.db` + `/data/box.key` | One SQLite DB; key is 0600 |
+| Data | `/data/bot.db` + `/data/bot.key` | One SQLite DB; key is 0600 |
 | Port | `8080` | Non-root user in the image |
 
 ## Updates and backups
 
-Pull a newer `inbox-assistant-in-a-box` (or rebuild `make build BOX=inbox-assistant`).
+Update with `docker pull goldvalleysolutions/inbox-triage-bot:0.2`, then `docker rm -f inbox-triage`
+and re-run the same `docker run` command (the `inbox-triage-data` volume keeps your data).
 Unedited role/skill text updates from the image; text the GVS operator edited is
-kept. Back up `box.db` and `box.key` **separately**. Losing the key means
+kept. Back up `bot.db` and `bot.key` **separately**. Losing the key means
 re-entering secrets; losing only the DB means a fresh `/setup`. Delete the
 volume to start over.
 
@@ -125,18 +146,40 @@ don't process patient health information.
 **Can it browse the web?** No. That is not on `tools_allowed` and a call is
 refused and logged.
 
-**Does it read my mailbox?** No. There is no IMAP or POP. Paste or type the
-message you want triaged.
+**Does it read my mailbox?** Yes, read-only. It never marks, moves or deletes mail.
+The only writes are copies saved to Sent: a reply you approved and, if you turn on
+"Email the brief to me", the daily brief email.
 
-**Does CI send real email?** No. Tests and the image job use a local fake SMTP
-server.
+**Can it send on its own?** No. Every `email.send` waits for your Approve click, and
+instructions inside an email never trigger a tool.
+
+**Does CI send real email?** No. Tests and the image job use local fake IMAP and SMTP
+servers.
 
 ## Help and paid services
 
 Gold Valley Solutions offers paid **setup, configuration, training and hosting**.
-See the [box pricing page](https://www.goldvalleysolutions.com/).
+See the [Gold Valley Bots pricing page](https://www.goldvalleysolutions.com/pricing/gold-valley-bots.html).
 
 ## License
 
 Apache License 2.0. See the repository `LICENSE` and `NOTICE`.
 © 2026 Gold Valley Solutions LLC.
+
+## End-to-end tests (Playwright)
+
+`tests/e2e/` starts the bot on core from source (pinned to gvs-core-bot `1c6e619`) with
+uvicorn, a temp `/data` and the stub model, then drives it in Chromium at desktop
+(1280x800) and mobile (390x844) sizes. `verify-local.sh` runs it through
+`.verify-local.env`, and it must pass before merge.
+
+```bash
+git clone https://github.com/goldvalleysolutions/gvs-core-bot.git ../gvs-core-bot
+git -C ../gvs-core-bot checkout 1c6e619
+pip install -r ../gvs-core-bot/requirements.txt -r tests/e2e/requirements.txt
+python -m playwright install chromium
+GVS_CORE_DIR=../gvs-core-bot python -m pytest tests/e2e -q
+```
+
+When a test fails, a screenshot and a trace go to `tests/e2e/artifacts/` (gitignored).
+Open the trace with `python -m playwright show-trace <file>.trace.zip`.
