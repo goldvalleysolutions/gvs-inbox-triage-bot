@@ -25,14 +25,17 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import Browser, Page, Playwright, sync_playwright
 
-CORE_SHA = (
-    "a1a5b5d0b60d5cbe514b7b2f4279274d476db88d"  # gvs-core-bot test, core 0.3.0 (PR 30)
-)
+CORE_SHA = "1c6e619a234efe210769071b9e54ace6977f86ce"  # gvs-core-bot test: jobs (#42) + mail (#43)
 REPO = Path(__file__).resolve().parents[2]
 ARTIFACTS = Path(__file__).resolve().parent / "artifacts"
 sys.path.insert(0, str(REPO / "scripts"))
 
+import fakecert
+from fakeimap import FakeIMAP
+from fakesmtp import FakeSMTP
 from steps_web import Web, write_root_key
+
+MAIL_USER, MAIL_PASSWORD = "owner@example.com", "app-pass"  # fake servers only
 
 VIEWPORTS = {
     "desktop": {"viewport": {"width": 1280, "height": 800}},
@@ -73,8 +76,50 @@ def _core_source() -> Path:
     return core
 
 
+class Mail:
+    """Fake IMAP (records flags/APPEND) + fake SMTP on 127.0.0.1 with a test cert."""
+
+    def __init__(self, folder: Path) -> None:
+        self.bundle = fakecert.write(folder)
+        self.imap = FakeIMAP(user=MAIL_USER, password=MAIL_PASSWORD).start()
+        self.smtp = FakeSMTP(user=MAIL_USER, password=MAIL_PASSWORD).start()
+
+    def env(self) -> dict[str, str]:
+        return {
+            "SSL_CERT_FILE": str(self.bundle),
+            "MAIL_ALLOW_PRIVATE_HOSTS": "1",
+            "MAIL_EXTRA_PORTS": f"{self.imap.port},{self.smtp.port}",
+        }
+
+    def close(self) -> None:
+        self.imap.close()
+        self.smtp.close()
+
+
 @pytest.fixture(scope="session")
-def core_copy(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]:
+def mail(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Mail]:
+    box = Mail(tmp_path_factory.mktemp("fake-tls"))
+    yield box
+    box.close()
+
+
+def mail_fields(box: Mail, password: str = MAIL_PASSWORD) -> dict[str, str]:
+    """The setup Mail account fields for the fake servers (one app password)."""
+    return {
+        "SMTP_HOST": "127.0.0.1",
+        "SMTP_PORT": str(box.smtp.port),
+        "SMTP_USER": MAIL_USER,
+        "SMTP_PASSWORD": password,
+        "SMTP_FROM": MAIL_USER,
+        "IMAP_HOST": "127.0.0.1",
+        "IMAP_PORT": str(box.imap.port),
+    }
+
+
+@pytest.fixture(scope="session")
+def core_copy(
+    tmp_path_factory: pytest.TempPathFactory, mail: Mail
+) -> tuple[Path, Path]:
     """(core dir with a throwaway root key installed, ctl dir holding its private key)."""
     src = _core_source()
     dst = tmp_path_factory.mktemp("core") / "core"
@@ -84,7 +129,12 @@ def core_copy(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]:
     ctl = tmp_path_factory.mktemp("ctl")
     write_root_key(ctl)
     shutil.copy(ctl / "gvs_root.pub", dst / "keys" / "gvs_root.pub")
+    global MAIL_ENV
+    MAIL_ENV = mail.env()
     return dst, ctl
+
+
+MAIL_ENV: dict[str, str] = {}
 
 
 class Bot:
@@ -97,6 +147,7 @@ class Bot:
             self.port = sock.getsockname()[1]
         self.base = f"http://127.0.0.1:{self.port}"
         self.proc: subprocess.Popen[bytes] | None = None
+        self.extra_env: dict[str, str] = {}
 
     def start(self) -> Bot:
         env = {
@@ -104,6 +155,8 @@ class Bot:
             "PYTHONPATH": str(self.core),
             "GVS_BOT_DIR": str(REPO / "bot"),
             "GVS_DATA_DIR": str(self.data),
+            **MAIL_ENV,
+            **self.extra_env,
         }
         self.proc = subprocess.Popen(
             [
@@ -184,7 +237,9 @@ def ready_bot(
     """A bot already through setup (over HTTP), shared by the chat/page/MCP tests."""
     bot = Bot(core_copy[0], core_copy[1], tmp_path_factory.mktemp("data")).start()
     setup = dict(getattr(request.module, "HTTP_SETUP", {}))
-    if setup.pop("smtp", False):
+    if setup.pop("mail", False):
+        setup["smtp"] = mail_fields(request.getfixturevalue("mail"))
+    elif setup.pop("smtp", False):
         setup["smtp"] = smtp_fields(request.getfixturevalue("smtp"))
     Web(bot.base).setup(**setup)
     yield bot
@@ -192,14 +247,9 @@ def ready_bot(
 
 
 @pytest.fixture(scope="session")
-def smtp(core_copy: tuple[Path, Path]) -> Iterator[object]:
-    """core's fake SMTP server (tests/fakesmtp.py); .messages holds what the bot sent."""
-    sys.path.insert(0, str(core_copy[0]))
-    from tests.fakesmtp import FakeSMTP
-
-    server = FakeSMTP(host="127.0.0.1").start()
-    yield server
-    server.close()
+def smtp(mail: Mail) -> FakeSMTP:
+    """The fake SMTP server; .messages holds what the bot sent."""
+    return mail.smtp
 
 
 def smtp_fields(server: object) -> dict[str, str]:

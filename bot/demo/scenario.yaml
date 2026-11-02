@@ -1,38 +1,26 @@
-# Demo walkthrough for Inbox Triage Bot.
+# Demo walkthrough for Inbox Triage Bot. Until a mailbox is set, mail.* and brief.* use
+# four built-in demo messages (Core IMAP connector in stub mode); nothing leaves the box.
 title: Inbox Triage Bot — try it
 steps:
   - id: setup
     title: Finish /setup
-    note: Stub model, no LLM key. Enter SMTP if you want email.send.
-  - id: clock
-    title: Ask the time
-    prompt: What time is it?
+    note: Stub model, no LLM key. In Mail account pick Gmail, Zoho or Outlook/M365 (or other), enter the email + one app password, press Test connection.
+  - id: brief
+    title: Get the brief
+    prompt: Brief me.
   - id: triage
-    title: Paste an email to triage
-    prompt: |
-      Triage this email and draft a reply.
-
-      From: sam@example.com
-      Subject: Invoice 1041
-      Hi — can you confirm invoice 1041 was paid last Friday?
-  - id: notes
-    title: Keep a follow-up
-    prompt: Note that I still need to attach the receipt for invoice 1041.
-  - id: email
-    title: Send the drafted reply
-    prompt: Email the admin the drafted reply about invoice 1041.
+    title: Look at one message
+    prompt: Read message 1 and triage it.
+  - id: draft
+    title: Draft a reply
+    prompt: Draft a reply to message 1 saying Friday 9am works.
+  - id: send
+    title: Send after approval
+    prompt: Send it.
+    note: The send waits for your Approve click; then it goes out over SMTP and a copy lands in Sent.
+  - id: schedule
+    title: Daily brief at 7:00 AM
+    note: Admin → Schedules changes the time and time zone. The Brief page (/r/inbox-triage/brief) shows the last brief, Run now, email-to-self, retention and Forget mailbox.
   - id: web
     title: Web browse is refused
-    prompt: Search the web for Sam's company and scrape their site.
-  - id: root
-    title: GVS role edit
-    note: Sign in with gvs-root; change the role; no rebuild.
-  - id: admin_404
-    title: Bot admin cannot see GVS screens
-    note: /gvs/role and /gvs/activity return 404.
-  - id: model
-    title: Switch model in admin
-    note: CI/stub only. Dummy key is masked; switch back to stub.
-  - id: mcp
-    title: MCP read only, then write with approval
-    note: Enable MCP, issue a token, ask + tools/list (no email.send). Switch to write with approval and approve a send.
+    prompt: Search the web for Dana's company.

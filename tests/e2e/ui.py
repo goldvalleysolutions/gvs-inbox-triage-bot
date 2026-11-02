@@ -16,6 +16,7 @@ def setup_ui(
     smtp: dict[str, str] | None = None,
     wizard: dict[str, str] | None = None,
     policy: str = "anyone",
+    model: tuple[str, str, str] | None = None,
 ) -> list[str]:
     """Walk /setup through the browser; returns the step names seen."""
     page.goto(base + "/setup")
@@ -34,17 +35,26 @@ def setup_ui(
             expect(page.locator("body")).to_contain_text("Who can use this bot?")
             page.click(f"label.choice:has(#policy-{policy})")
         elif step == "model":
-            form.locator("#provider").select_option("stub")
+            if (
+                model
+            ):  # (provider, model id, API key): a live model for the gated live pass
+                form.locator("#provider").select_option(model[0])
+                form.locator("#model").fill(model[1])
+                form.locator("[name=api_key]").fill(model[2])
+            else:
+                form.locator("#provider").select_option("stub")
             form.locator("#test-model").click()
             page.wait_for_load_state()
             form = page.locator(
                 "form", has=page.locator("input[name=step][value=model]")
             )
-            expect(form.locator("#save-model")).to_be_enabled()
+            expect(form.locator("#save-model")).to_be_enabled(timeout=60000)
             form.locator("#save-model").click()
             page.wait_for_load_state()
             continue
         elif step == "connectors":
+            if smtp and form.locator("#mail_preset").count():
+                form.locator("#mail_preset").select_option("custom")
             for name, value in (smtp or {}).items():
                 form.locator(f"[name={name}]").fill(value)
         elif step == "wizard":
