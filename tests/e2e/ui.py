@@ -45,6 +45,8 @@ def setup_ui(
             page.wait_for_load_state()
             continue
         elif step == "connectors":
+            if smtp and form.locator("#mail_preset").count():
+                form.locator("#mail_preset").select_option("custom")
             for name, value in (smtp or {}).items():
                 form.locator(f"[name={name}]").fill(value)
         elif step == "wizard":
