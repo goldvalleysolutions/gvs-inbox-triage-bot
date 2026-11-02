@@ -41,7 +41,12 @@ def main() -> None:
         }
     )
     code, home = web.get("/")
-    assert code == 200 and BRAND in home and "in a Box" not in home and "Powered by Gold Valley Solutions" in home
+    assert (
+        code == 200
+        and BRAND in home
+        and "in a Box" not in home
+        and "Powered by Gold Valley Solutions" in home
+    )
 
     print("step 2 clock")
     assert web.ask("CALL clock.now {}")["blocked"] is False

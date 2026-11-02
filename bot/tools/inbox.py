@@ -36,8 +36,10 @@ _DEMO = [
     (
         "Dana Ortiz <dana@ortizdental.example>",
         "Can we move Thursday's install?",
-        "Hi, something came up. Can we move Thursday's install to Friday morning? "
-        "Please confirm today so I can tell my staff.",
+        (
+            "Hi, something came up. Can we move Thursday's install to Friday morning? "
+            "Please confirm today so I can tell my staff."
+        ),
     ),
     (
         "Billing <billing@hostco.example>",
@@ -56,30 +58,34 @@ _DEMO = [
     ),
 ]
 
-_AUTOMATED = re.compile(r"no-?reply|do-?not-?reply|mailer-daemon|notifications?@|news(letter)?@")
-_NEWSLETTER = re.compile(r"unsubscribe|newsletter|weekly digest|view in browser|this week in", re.I)
+_AUTOMATED = re.compile(
+    r"no-?reply|do-?not-?reply|mailer-daemon|notifications?@|news(letter)?@"
+)
+_NEWSLETTER = re.compile(
+    r"unsubscribe|newsletter|weekly digest|view in browser|this week in", re.IGNORECASE
+)
 _BILLING = re.compile(
     r"invoice|payment|past due|overdue|receipt|billing|refund|charge[ds]?\b|statement|balance due",
-    re.I,
+    re.IGNORECASE,
 )
 _VENDOR = re.compile(
     r"\bquote\b|supplier|vendor|shipment|shipping|purchase order|\bPO\b|delivery|order #|"
     r"order confirmation|restock",
-    re.I,
+    re.IGNORECASE,
 )
 _NOW = re.compile(
     r"\burgent\b|\basap\b|immediately|right away|past due|overdue|final notice|"
     r"suspen|emergency|outage|\bdown\b|pay now",
-    re.I,
+    re.IGNORECASE,
 )
 _TODAY = re.compile(
     r"\btoday\b|by (end of )?day|\beod\b|tomorrow|deadline|by (mon|tues|wednes|thurs|fri)day|"
     r"please (confirm|reply|let me know|approve)|can you|could you|\?",
-    re.I,
+    re.IGNORECASE,
 )
 _ASK = re.compile(
     r"\?|please (confirm|reply|let me know|approve|send|call)|can you|could you|let me know",
-    re.I,
+    re.IGNORECASE,
 )
 
 
@@ -189,7 +195,10 @@ def classify(msg: dict[str, Any]) -> dict[str, Any]:
 
 def summarize(msg: dict[str, Any]) -> str:
     """1-2 lines: who and what, then the first sentence of the body."""
-    name = parseaddr(str(msg.get("sender", "")))[0] or parseaddr(str(msg.get("sender", "")))[1]
+    name = (
+        parseaddr(str(msg.get("sender", "")))[0]
+        or parseaddr(str(msg.get("sender", "")))[1]
+    )
     body = " ".join(str(msg.get("body", "")).split())
     first = re.split(r"(?<=[.!?])\s", body, maxsplit=1)[0] if body else ""
     line1 = f"{name or 'Unknown'}: {msg.get('subject') or '(no subject)'}"
@@ -211,7 +220,10 @@ def build_brief(store: Any) -> dict[str, Any]:
     lines = [f"Daily brief — {stamp} ({len(rows)} messages, {new} new)", ""]
     reply = [r for r in rows if r["needs_reply"]]
     lines.append(f"Needs a reply ({len(reply)})")
-    lines += [f"- [{r['urgency']}] {r['summary'].splitlines()[0]} (#{r['uid']})" for r in reply]
+    lines += [
+        f"- [{r['urgency']}] {r['summary'].splitlines()[0]} (#{r['uid']})"
+        for r in reply
+    ]
     if not reply:
         lines.append("- nothing waiting on you")
     for cat in CATEGORIES:
@@ -237,11 +249,15 @@ def last_brief(store: Any) -> dict[str, Any] | None:
 # --- tools ---------------------------------------------------------------------------------
 def mail_list(store: Any, limit: int = 20, **_: Any) -> str:
     sync(store)
-    rows = sorted(_cache(store).values(), key=lambda m: -int(m["uid"]))[: max(1, int(limit))]
+    rows = sorted(_cache(store).values(), key=lambda m: -int(m["uid"]))[
+        : max(1, int(limit))
+    ]
     out = []
     for m in rows:
         c = classify(m)
-        out.append(f"#{m['uid']} [{c['category']}/{c['urgency']}] {m['sender']}: {m['subject']}")
+        out.append(
+            f"#{m['uid']} [{c['category']}/{c['urgency']}] {m['sender']}: {m['subject']}"
+        )
     return "\n".join(out) or "No messages in the window."
 
 

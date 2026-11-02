@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """In-process SMTP sink for CI. No real mail leaves the machine.
 
 Speaks enough ESMTP for smtplib: EHLO lists STARTTLS (test cert, scripts/fakecert.py) and,
@@ -18,7 +19,7 @@ class FakeSMTP:
         host: str = "127.0.0.1",
         starttls: bool = True,
         user: str = "owner@example.com",
-        password: str = "app-pass",  # noqa: S107 - fake server
+        password: str = "app-pass",
     ) -> None:
         self.messages: list[bytes] = []
         self.commands: list[str] = []
@@ -94,7 +95,9 @@ class FakeSMTP:
                 cmd = text.upper()
                 self.commands.append(text)
                 if cmd.startswith(("EHLO", "HELO")):
-                    tls_line = "250-STARTTLS\r\n" if self.starttls and not state["tls"] else ""
+                    tls_line = (
+                        "250-STARTTLS\r\n" if self.starttls and not state["tls"] else ""
+                    )
                     auth = state["tls"] or not self.starttls
                     send("250-fake\r\n" + tls_line + ("250-AUTH PLAIN\r\n" if auth else "")
                          + "250 OK\r\n")  # fmt: skip
@@ -115,3 +118,20 @@ class FakeSMTP:
                     return
                 else:
                     send("250 OK\r\n")
+
+
+def main() -> None:
+    """CLI for scripts/inbox-triage-steps.sh: print the port, serve until killed.
+
+    The container reaches this test-only server via host.docker.internal (docker0), so it
+    listens beyond loopback. Random port, plain SMTP, lives only for the steps run.
+    """
+    # nosemgrep: python.lang.security.audit.network.bind.avoid-bind-to-all-interfaces
+    server = FakeSMTP(host="0.0.0.0", starttls=False).start()
+    print(server.port, flush=True)
+    with contextlib.suppress(KeyboardInterrupt):
+        server.thread.join()
+
+
+if __name__ == "__main__":
+    main()

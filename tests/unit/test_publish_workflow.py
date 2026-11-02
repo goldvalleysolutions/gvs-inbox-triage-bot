@@ -18,7 +18,14 @@ STEPS = DOC["jobs"]["release"]["steps"]
 MODE = next(s for s in STEPS if s.get("id") == "mode")
 
 
-def _run_mode(tmp_path: Path, event: str, ref: str, user: bool, token: bool, released: bool = False):
+def _run_mode(
+    tmp_path: Path,
+    event: str,
+    ref: str,
+    user: bool,
+    token: bool,
+    released: bool = False,
+):
     """Execute the mode step's bash with a stub `gh`; return (rc, stdout, outputs)."""
     bindir = tmp_path / "bin"
     bindir.mkdir(exist_ok=True)
@@ -29,13 +36,20 @@ def _run_mode(tmp_path: Path, event: str, ref: str, user: bool, token: bool, rel
     out.write_text("")
     env = {
         "PATH": f"{bindir}:{os.environ['PATH']}",
-        "EVENT": event, "REF": ref,
+        "EVENT": event,
+        "REF": ref,
         "HAS_USERNAME": "true" if user else "false",
         "HAS_TOKEN": "true" if token else "false",
-        "TAG": "v0.0.1", "GITHUB_REPOSITORY": "o/r", "GITHUB_OUTPUT": str(out),
+        "TAG": "v0.0.1",
+        "GITHUB_REPOSITORY": "o/r",
+        "GITHUB_OUTPUT": str(out),
     }
     p = subprocess.run(
-        ["bash", "-e", "-c", MODE["run"]], check=False, env=env, capture_output=True, text=True
+        ["bash", "-e", "-c", MODE["run"]],
+        check=False,
+        env=env,
+        capture_output=True,
+        text=True,
     )
     outputs = dict(ln.split("=", 1) for ln in out.read_text().splitlines() if "=" in ln)
     return p.returncode, p.stdout, outputs
@@ -50,7 +64,10 @@ def test_main_push_fails_naming_each_missing_secret(tmp_path: Path) -> None:
     main = ("push", "refs/heads/main")
     rc, out, o = _run_mode(tmp_path, *main, user=False, token=False)
     assert rc != 0 and o.get("push") != "true"
-    assert "Missing secret DOCKERHUB_USERNAME" in out and "Missing secret DOCKERHUB_TOKEN" in out
+    assert (
+        "Missing secret DOCKERHUB_USERNAME" in out
+        and "Missing secret DOCKERHUB_TOKEN" in out
+    )
     rc, out, _ = _run_mode(tmp_path, *main, user=True, token=False)
     assert rc != 0 and "DOCKERHUB_TOKEN" in out and "DOCKERHUB_USERNAME" not in out
     rc, out, _ = _run_mode(tmp_path, *main, user=False, token=True)
@@ -63,7 +80,9 @@ def test_main_push_fails_naming_each_missing_secret(tmp_path: Path) -> None:
 
 def test_dispatch_never_pushes_and_needs_no_secrets(tmp_path: Path) -> None:
     for user, token in ((False, False), (True, True)):
-        rc, _, o = _run_mode(tmp_path, "workflow_dispatch", "refs/heads/main", user, token)
+        rc, _, o = _run_mode(
+            tmp_path, "workflow_dispatch", "refs/heads/main", user, token
+        )
         assert rc == 0 and o["push"] == "false" and o["release"] == "false"
     for s in STEPS:
         w = s.get("with") or {}
@@ -79,11 +98,18 @@ def test_actions_pinned_and_no_latest() -> None:
 
 
 def test_image_name_exact() -> None:
-    names = set(re.findall(r"(goldvalleysolutions/[\w.-]+bot):", TEXT)) - {"goldvalleysolutions/core-bot"}
-    names |= {f"goldvalleysolutions/{m}" for m in re.findall(r"\$\{\{ steps\.mode\.outputs\.ns \}\}/([\w.-]+):", TEXT)}
+    names = set(re.findall(r"(goldvalleysolutions/[\w.-]+bot):", TEXT)) - {
+        "goldvalleysolutions/core-bot"
+    }
+    names |= {
+        f"goldvalleysolutions/{m}"
+        for m in re.findall(r"\$\{\{ steps\.mode\.outputs\.ns \}\}/([\w.-]+):", TEXT)
+    }
     assert names == {"goldvalleysolutions/inbox-triage-bot"}
     assert "ns=goldvalleysolutions;" in MODE["run"]
 
 
 def test_main_publish_never_cancelled_in_progress() -> None:
-    assert DOC["concurrency"]["cancel-in-progress"] == "${{ github.event_name != 'push' }}"
+    assert (
+        DOC["concurrency"]["cancel-in-progress"] == "${{ github.event_name != 'push' }}"
+    )

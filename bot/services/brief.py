@@ -13,12 +13,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Request
-from fastapi.responses import RedirectResponse
-
 from core.auth import csrf
 from core.sdk.jobs import Job, run_now
 from core.ui.html import bot_name, esc, page
+from fastapi import APIRouter, Request
+from fastapi.responses import RedirectResponse
 
 _NAME = "gvs_inbox_triage"
 
@@ -39,7 +38,12 @@ def daily_brief(ctx: Any) -> str:
     inbox = _inbox()
     store = ctx.store
     brief = inbox.build_brief(store)
-    store.log("job", "brief.built", f"trigger={ctx.trigger} items={len(brief['items'])}", "job")
+    store.log(
+        "job",
+        "brief.built",
+        f"trigger={ctx.trigger} items={len(brief['items'])}",
+        "job",
+    )
     if store.get_setting(inbox.EMAIL_SELF_KEY) == "1" and store.admin_email():
         from core.tools.builtins import email_send
 
@@ -52,12 +56,14 @@ def daily_brief(ctx: Any) -> str:
                 actor="job",
                 source="job",
             )
-        except Exception as exc:  # a failed email never fails the brief
+        except Exception as exc:  # noqa: BLE001  a failed email never fails the brief
             store.log("job", "brief.email", f"result=error {type(exc).__name__}", "job")
     return brief["text"]
 
 
-jobs = [Job("daily_brief", daily_brief, schedule="daily 07:00", description="Inbox brief")]
+jobs = [
+    Job("daily_brief", daily_brief, schedule="daily 07:00", description="Inbox brief")
+]
 
 router = APIRouter()
 
@@ -67,7 +73,11 @@ def brief_page(request: Request) -> Any:
     inbox = _inbox()
     store = request.app.state.store
     last = inbox.last_brief(store)
-    text = last["text"] if last else "No brief yet. Use Run now, or say “brief me” in chat."
+    text = (
+        last["text"]
+        if last
+        else "No brief yet. Use Run now, or say “brief me” in chat."
+    )
     checked = " checked" if store.get_setting(inbox.EMAIL_SELF_KEY) == "1" else ""
     tok = csrf.token(request)
     hidden = f"<input type=hidden name=csrf value='{esc(tok)}'>"
@@ -100,7 +110,9 @@ async def brief_settings(request: Request) -> Any:
     if form is None:
         return page("Rejected", "<h1>Rejected</h1>", status=403, bot=bot_name(request))
     inbox, store = _inbox(), request.app.state.store
-    store.set_setting(inbox.EMAIL_SELF_KEY, "1" if form.get("email_self") == "1" else "0")
+    store.set_setting(
+        inbox.EMAIL_SELF_KEY, "1" if form.get("email_self") == "1" else "0"
+    )
     days = (form.get("retention_days") or "").strip()
     if days.isdigit() and int(days) >= 1:
         store.set_setting(inbox.RETENTION_KEY, days)

@@ -37,7 +37,10 @@ def write(folder: Path) -> Path:
         .not_valid_after(now + datetime.timedelta(days=2))
         .add_extension(
             x509.SubjectAlternativeName(
-                [x509.DNSName("localhost"), x509.IPAddress(ipaddress.ip_address("127.0.0.1"))]
+                [
+                    x509.DNSName("localhost"),
+                    x509.IPAddress(ipaddress.ip_address("127.0.0.1")),
+                ]
             ),
             critical=False,
         )

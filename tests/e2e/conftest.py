@@ -25,9 +25,7 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import Browser, Page, Playwright, sync_playwright
 
-CORE_SHA = (
-    "1c6e619a234efe210769071b9e54ace6977f86ce"  # gvs-core-bot test: jobs (#42) + mail (#43)
-)
+CORE_SHA = "1c6e619a234efe210769071b9e54ace6977f86ce"  # gvs-core-bot test: jobs (#42) + mail (#43)
 REPO = Path(__file__).resolve().parents[2]
 ARTIFACTS = Path(__file__).resolve().parent / "artifacts"
 sys.path.insert(0, str(REPO / "scripts"))
@@ -119,7 +117,9 @@ def mail_fields(box: Mail, password: str = MAIL_PASSWORD) -> dict[str, str]:
 
 
 @pytest.fixture(scope="session")
-def core_copy(tmp_path_factory: pytest.TempPathFactory, mail: Mail) -> tuple[Path, Path]:
+def core_copy(
+    tmp_path_factory: pytest.TempPathFactory, mail: Mail
+) -> tuple[Path, Path]:
     """(core dir with a throwaway root key installed, ctl dir holding its private key)."""
     src = _core_source()
     dst = tmp_path_factory.mktemp("core") / "core"

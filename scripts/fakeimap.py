@@ -54,11 +54,13 @@ class FakeIMAP:
         self,
         messages: list[bytes] | None = None,
         user: str = "owner@example.com",
-        password: str = "app-pass",  # noqa: S107 - fake server
+        password: str = "app-pass",
         uidvalidity: int = 7,
         starttls: bool = True,
     ) -> None:
-        self.starttls = starttls  # offer STARTTLS (a test cert from scripts/fakecert.py)
+        self.starttls = (
+            starttls  # offer STARTTLS (a test cert from scripts/fakecert.py)
+        )
         self.mail = {i + 1: m for i, m in enumerate(messages or [])}
         self.user, self.password, self.uidvalidity = user, password, uidvalidity
         self.commands: list[str] = []
@@ -161,7 +163,12 @@ class FakeIMAP:
                         raw = self.mail[uid]
                         part = raw[: int(cap.group(1))] if cap else raw
                         head = f"* {seq} FETCH (UID {uid} RFC822.SIZE {len(raw)} BODY[]<0> "
-                        out(head.encode() + f"{{{len(part)}}}\r\n".encode() + part + b")\r\n")
+                        out(
+                            head.encode()
+                            + f"{{{len(part)}}}\r\n".encode()
+                            + part
+                            + b")\r\n"
+                        )
                 elif cmd == "APPEND":
                     name, rest = parse_astring(args)
                     m = re.match(r" (\(.*?\)) .*\{(\d+)\}$", rest)
