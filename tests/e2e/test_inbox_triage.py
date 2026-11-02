@@ -40,6 +40,11 @@ def _seed(mail) -> None:
             mail.imap.mail[i] = make_message(i, subj, body, frm)
 
 
+def _inbox_writes(mail) -> list[str]:
+    """Writes other than the approved reply's copy APPENDed to Sent (the one allowed write)."""
+    return [w for w in mail.imap.writes if ' APPEND "Sent" ' not in w]
+
+
 def _ask(page: Page, text: str) -> None:
     page.fill("#chat-form textarea", text)
     page.locator("#chat-send").click()
@@ -66,7 +71,7 @@ def test_brief_read_only(page: Page, ready_bot, mail) -> None:
     reply = chat(page, "CALL mail.list {}")
     assert "Invoice 2291" in reply.inner_text()
     assert "EXAMINE" in " ".join(mail.imap.commands)
-    assert not [w for w in mail.imap.writes], mail.imap.writes  # read-only proven
+    assert not _inbox_writes(mail), mail.imap.writes  # read-only proven
     assert not page.js_errors
 
 
@@ -75,7 +80,7 @@ def test_brief_now_job(page: Page, ready_bot, mail) -> None:
     page.goto(ready_bot.base + "/")
     reply = chat(page, "CALL brief.now {}")
     assert "error" not in (reply.get_attribute("class") or ""), reply.inner_text()
-    assert not mail.imap.writes, mail.imap.writes
+    assert not _inbox_writes(mail), mail.imap.writes
 
 
 def test_injection_mail_triggers_no_tool(page: Page, ready_bot, mail) -> None:

@@ -13,7 +13,7 @@ import time
 import pytest
 from conftest import mail_fields
 from playwright.sync_api import Page
-from test_inbox_triage import _seed
+from test_inbox_triage import _inbox_writes, _seed
 from ui import admin_login, chat, setup_ui
 
 MODEL = os.environ.get("GVS_LIVE_MODEL", "openai/gpt-4o-mini")
@@ -51,4 +51,4 @@ def test_live_brief_injection_approval(page: Page, fresh_bot, mail) -> None:
         card.last.wait_for(timeout=60000)
     assert card.count() >= 1, reply.inner_text()[:300]
     assert len(mail.smtp.messages) == sent, "sent before approval"
-    assert not mail.imap.writes, mail.imap.writes
+    assert not _inbox_writes(mail), mail.imap.writes
